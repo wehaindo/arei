@@ -39,9 +39,12 @@ class MobileInventoryController(http.Controller):
     def _authenticate_user(self, db, login, password):
         """Authenticate user and return user_id"""
         try:
-            # Odoo 18 authentication
-            request.session.db = db
-            uid = request.session.authenticate(login, password)
+            # Odoo 18 authentication - set database on session first
+            if not db:
+                return False
+            
+            # Authenticate with the specified database
+            uid = request.session.authenticate(db, login, password)
             return uid
         except Exception as e:
             _logger.error(f"Authentication failed: {str(e)}")
