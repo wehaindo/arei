@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { odooApi } from "@/lib/api";
 import { Picking } from "@/lib/types";
@@ -23,7 +23,7 @@ import {
   FileText,
 } from "lucide-react";
 
-export default function PickingsPage() {
+function PickingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -137,7 +137,7 @@ export default function PickingsPage() {
             <Card
               key={picking.id}
               className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => router.push(`/pickings/${picking.id}`)}
+              onClick={() => router.push(`/pickings/detail?id=${picking.id}`)}
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -216,5 +216,20 @@ export default function PickingsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function PickingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <PickingsContent />
+    </Suspense>
   );
 }

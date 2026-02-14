@@ -1,0 +1,31 @@
+{
+  "name": "capacitor-rfid-reader",
+  "version": "1.0.0",
+  "description": "Capacitor plugin for Chainway C72 RFID reader",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "scripts": {
+    "build": "npm run clean && tsc && rollup -c rollup.config.js",
+    "clean": "rimraf ./dist"
+  },
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "rfid",
+    "chainway"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

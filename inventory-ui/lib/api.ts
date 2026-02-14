@@ -320,6 +320,12 @@ class OdooApiService {
   async validatePicking(pickingId: number) {
     return this.makeRequest(`/api/mobile/pickings/${pickingId}/validate`, {});
   }
+
+  async scanRFIDTags(pickingId: number, rfidTags: string[]) {
+    return this.makeRequest(`/api/mobile/pickings/${pickingId}/scan-rfid`, {
+      rfid_tags: rfidTags,
+    });
+  }
 }
 
 export const odooApi = new OdooApiService();

@@ -602,6 +602,130 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
+    @http.route('/api/mobile/pickings/<int:picking_id>/scan-rfid', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def scan_rfid_tags(self, picking_id, **kwargs):
+        """
+        Process multiple RFID tags (lot numbers) for a picking
+        Expected params: rfid_tags (array of EPC strings)
+        Each RFID tag EPC is a lot number, and each lot refers to one product
+        """
+        def handler(data):
+            rfid_tags = data.get('rfid_tags', [])
+
+            if not rfid_tags or not isinstance(rfid_tags, list):
+                return {'success': False, 'error': 'rfid_tags array is required'}
+
+            picking = request.env['stock.picking'].browse(picking_id)
+            if not picking.exists():
+                return {'success': False, 'error': 'Picking not found'}
+
+            results = []
+            success_count = 0
+            error_count = 0
+
+            for epc in rfid_tags:
+                try:
+                    # Search for lot by EPC (lot name = EPC)
+                    lot = request.env['stock.lot'].search([('name', '=', epc)], limit=1)
+                    
+                    if not lot:
+                        results.append({
+                            'epc': epc,
+                            'success': False,
+                            'error': 'Lot not found'
+                        })
+                        error_count += 1
+                        continue
+
+                    product = lot.product_id
+                    if not product:
+                        results.append({
+                            'epc': epc,
+                            'success': False,
+                            'error': 'Lot has no product associated'
+                        })
+                        error_count += 1
+                        continue
+
+                    # Find the move for this product in the picking
+                    move = picking.move_ids_without_package.filtered(
+                        lambda m: m.product_id.id == product.id
+                    )
+                    
+                    if not move:
+                        results.append({
+                            'epc': epc,
+                            'success': False,
+                            'error': f'Product "{product.name}" not found in this picking'
+                        })
+                        error_count += 1
+                        continue
+
+                    move = move[0]  # Take first match
+
+                    # Check if this lot already has a move line in this picking
+                    existing_line = request.env['stock.move.line'].search([
+                        ('move_id', '=', move.id),
+                        ('lot_id', '=', lot.id),
+                        ('picking_id', '=', picking_id)
+                    ], limit=1)
+
+                    if existing_line:
+                        results.append({
+                            'epc': epc,
+                            'success': False,
+                            'error': 'This lot has already been scanned'
+                        })
+                        error_count += 1
+                        continue
+
+                    # Create a new move line with lot (quantity = 1 per RFID tag)
+                    request.env['stock.move.line'].create({
+                        'move_id': move.id,
+                        'product_id': product.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                        'quantity': 1.0,
+                        'picking_id': picking_id,
+                        'lot_id': lot.id,
+                    })
+
+                    # Get updated quantity done for this move
+                    updated_qty = sum(move.move_line_ids.mapped('quantity'))
+
+                    results.append({
+                        'epc': epc,
+                        'success': True,
+                        'product_name': product.name,
+                        'product_id': product.id,
+                        'lot_name': lot.name,
+                        'quantity_done': updated_qty
+                    })
+                    success_count += 1
+
+                except Exception as e:
+                    _logger.error(f"Error processing RFID tag {epc}: {str(e)}")
+                    results.append({
+                        'epc': epc,
+                        'success': False,
+                        'error': str(e)
+                    })
+                    error_count += 1
+
+            return {
+                'success': True,
+                'message': f'Processed {len(rfid_tags)} tags: {success_count} successful, {error_count} failed',
+                'data': {
+                    'total': len(rfid_tags),
+                    'success_count': success_count,
+                    'error_count': error_count,
+                    'results': results
+                }
+            }
+        
+        return self._handle_request(handler)
+
     @http.route('/api/mobile/pickings/<int:picking_id>/validate', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_picking(self, picking_id, **kwargs):
         """Validate/Complete a stock picking operation"""
