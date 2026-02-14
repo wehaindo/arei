@@ -39,21 +39,28 @@ class MobileInventoryController(http.Controller):
     def _authenticate_user(self, db, login, password):
         """Authenticate user and return user_id"""
         try:
-            # Odoo 18 authentication - database is set via context, not as parameter
             from odoo.http import db_filter, db_list
+            from odoo.service import security
             
             # Verify database exists
             dbs = db_list(force=True)
             if db not in dbs:
-                _logger.error(f"Database '{db}' not found")
+                _logger.error(f"Database '{db}' not found in available databases: {dbs}")
                 return False
             
-            # Set database in session
-            request.session.db = db
+            # Use Odoo's security check_credentials method
+            # This is the proper way in Odoo 18
+            uid = security.check_credentials(db, login, password)
             
-            # Authenticate with login and password only (Odoo 18 signature)
-            uid = request.session.authenticate(login, password)
+            if uid:
+                # Set the database in session after successful authentication
+                request.session.db = db
+                request.session.uid = uid
+                request.session.login = login
+                request.session.context = request.env['res.users'].sudo().browse(uid).context_get()
+                
             return uid
+            
         except Exception as e:
             _logger.error(f"Authentication failed: {str(e)}")
             return False
