@@ -213,6 +213,11 @@ export default function PickingDetailPage() {
     });
   };
 
+  // Check if picking can be edited (not done or cancelled)
+  const canEdit = () => {
+    return picking && ['confirmed', 'waiting', 'assigned'].includes(picking.state);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -250,7 +255,7 @@ export default function PickingDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              {picking.state === "assigned" && (
+              {canEdit() && (
                 <>
                   <Button
                     variant="outline"
@@ -310,7 +315,7 @@ export default function PickingDetailPage() {
         </div>
 
         {/* Scan Mode Panel */}
-        {scanMode && picking.state === "assigned" && (
+        {scanMode && canEdit() && (
           <Card className="mb-6 border-blue-200 bg-blue-50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -419,7 +424,7 @@ export default function PickingDetailPage() {
                   )}
 
                   {/* Manual Input Section */}
-                  {!scanMode && selectedMoveId === line.id && picking.state === "assigned" && (
+                  {!scanMode && selectedMoveId === line.id && canEdit() && (
                     <div className="pt-4 border-t space-y-3 bg-blue-50 p-4 rounded-lg">
                       <div className="flex justify-between items-center">
                         <p className="font-semibold">Add Quantity</p>
@@ -467,7 +472,7 @@ export default function PickingDetailPage() {
                   )}
 
                   {/* Add Button */}
-                  {!scanMode && selectedMoveId !== line.id && picking.state === "assigned" && (
+                  {!scanMode && selectedMoveId !== line.id && canEdit() && (
                     <Button
                       variant="outline"
                       onClick={() => {

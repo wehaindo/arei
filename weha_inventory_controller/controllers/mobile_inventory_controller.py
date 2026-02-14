@@ -133,6 +133,10 @@ class MobileInventoryController(http.Controller):
             # Parse JSON body for POST requests
             data = json.loads(request.httprequest.data) if request.httprequest.data else {}
             
+            # Extract params from JSON-RPC style request
+            if 'params' in data:
+                data = data['params']
+            
             # Call the handler function
             result = handler_func(data)
             
@@ -617,9 +621,13 @@ class MobileInventoryController(http.Controller):
             if not picking.exists():
                 return {'success': False, 'error': 'Picking not found'}
 
-            if picking.state != 'assigned':
+            if picking.state not in ['confirmed', 'waiting', 'assigned']:
                 return {'success': False, 'error': f'Picking is in state {picking.state}, cannot validate'}
 
+            # If picking is confirmed or waiting, we need to check availability first
+            if picking.state in ['confirmed', 'waiting']:
+                picking.action_assign()
+            
             # Validate the picking
             picking.button_validate()
 
