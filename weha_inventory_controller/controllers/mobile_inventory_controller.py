@@ -15,16 +15,26 @@ class MobileInventoryController(http.Controller):
     Handles Receipt, Delivery, and Internal Transfer operations
     """
 
-    def _get_cors_headers(self):
-        """Get CORS headers for responses"""
-        # Get the origin from the request header
-        origin = request.httprequest.headers.get('Origin', 'http://localhost:3000')
-        return {
+    def _cors_preflight_response(self):
+        """Handle OPTIONS preflight requests"""
+        origin = request.httprequest.headers.get('Origin', '*')
+        headers = {
             'Access-Control-Allow-Origin': origin,
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Accept',
             'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Max-Age': '86400',
         }
+        return Response(status=200, headers=headers)
+
+    def _apply_cors_headers(self, response):
+        """Apply CORS headers to response"""
+        origin = request.httprequest.headers.get('Origin', '*')
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Accept'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
     def _authenticate_user(self, db, login, password):
         """Authenticate user and return user_id"""
@@ -35,48 +45,62 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Authentication failed: {str(e)}")
             return False
 
-    def _make_response(self, data, status=200):
-        """Create JSON response with CORS headers"""
-        response = Response(
-            json.dumps(data, default=str),
-            status=status,
-            mimetype='application/json'
-        )
-        response.headers.update(self._get_cors_headers())
-        return response
-
-    def _error_response(self, message, status=400):
-        """Create error response"""
-        return self._make_response({
-            'success': False,
-            'error': message
-        }, status=status)
-
-    def _success_response(self, data, message="Success"):
-        """Create success response"""
-        return self._make_response({
-            'success': True,
-            'message': message,
-            'data': data
-        })
-
     # ==================== AUTHENTICATION ====================
 
-    @http.route('/api/mobile/auth/login', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/auth/login', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def mobile_login(self, **kwargs):
         """
         Mobile app login endpoint
         Expected params: db, login, password
         """
+        # Handle preflight OPTIONS request
+        if request.httprequest.method == 'OPTIONS':
+            return self._cors_preflight_response()
+
         try:
-            db = kwargs.get('db')
-            login = kwargs.get('login')
-            password = kwargs.get('password')
+            # Parse JSON body
+            data = json.loads(request.httprequest.data.decode('utf-8'))
+            params = data.get('params', {})
+            
+            db = params.get('db')
+            login = params.get('login')
+            password = params.get('password')
 
             if not all([db, login, password]):
-                return {'success': False, 'error': 'Missing required parameters'}
+                result = {'success': False, 'error': 'Missing required parameters'}
+            else:
+                uid = self._authenticate_user(db, login, password)
+                if uid:
+                    user = request.env['res.users'].sudo().browse(uid)
+                    result = {
+                        'success': True,
+                        'data': {
+                            'user_id': uid,
+                            'session_id': request.session.sid,
+                            'user_name': user.name,
+                            'company_id': user.company_id.id,
+                            'company_name': user.company_id.name,
+                        }
+                    }
+                else:
+                    result = {'success': False, 'error': 'Invalid credentials'}
 
-            uid = self._authenticate_user(db, login, password)
+            response = Response(
+                json.dumps(result, default=str),
+                status=200,
+                mimetype='application/json'
+            )
+            return self._apply_cors_headers(response)
+
+        except Exception as e:
+            _logger.error(f"Login error: {str(e)}")
+            result = {'success': False, 'error': str(e)}
+            response = Response(
+                json.dumps(result),
+                status=500,
+                mimetype='application/json'
+            )
+            return self._apply_cors_headers(response)
             if uid:
                 user = request.env['res.users'].sudo().browse(uid)
                 return {
