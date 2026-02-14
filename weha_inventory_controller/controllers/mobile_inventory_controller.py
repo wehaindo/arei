@@ -285,10 +285,10 @@ class MobileInventoryController(http.Controller):
 
             types_data = []
             for pt in picking_types:
-                # Count pending pickings for this type
+                # Count pending pickings for this type (confirmed, waiting, assigned - ready to process)
                 pending_count = request.env['stock.picking'].search_count([
                     ('picking_type_id', '=', pt.id),
-                    ('state', '=', 'assigned')
+                    ('state', 'in', ['confirmed', 'waiting', 'assigned'])
                 ])
 
                 types_data.append({
@@ -323,9 +323,13 @@ class MobileInventoryController(http.Controller):
             if picking_type_id:
                 domain.append(('picking_type_id', '=', int(picking_type_id)))
             
-            state = data.get('state', 'assigned')
+            state = data.get('state')
             if state:
                 domain.append(('state', '=', state))
+            else:
+                # Default: show confirmed, waiting, and assigned pickings (ready to process)
+                # Exclude: draft (not ready), done (completed), cancel (cancelled)
+                domain.append(('state', 'in', ['confirmed', 'waiting', 'assigned']))
             
             date_from = data.get('date_from')
             if date_from:

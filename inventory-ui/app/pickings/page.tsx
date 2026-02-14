@@ -42,7 +42,7 @@ export default function PickingsPage() {
   const loadPickings = async () => {
     setIsLoading(true);
     try {
-      const filters: any = { state: "assigned" };
+      const filters: any = {};
       if (pickingTypeId) {
         filters.picking_type_id = parseInt(pickingTypeId);
       }
