@@ -273,6 +273,363 @@ class MobileInventoryController(http.Controller):
             )
             return self._apply_cors_headers(response)
 
+    # ==================== UNIFIED STOCK PICKING OPERATIONS ====================
+
+    @http.route('/api/mobile/operation-types', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def get_operation_types(self, **kwargs):
+        """Get all available picking operation types"""
+        def handler(data):
+            picking_types = request.env['stock.picking.type'].search([
+                ('active', '=', True)
+            ], order='sequence, name')
+
+            types_data = []
+            for pt in picking_types:
+                # Count pending pickings for this type
+                pending_count = request.env['stock.picking'].search_count([
+                    ('picking_type_id', '=', pt.id),
+                    ('state', '=', 'assigned')
+                ])
+
+                types_data.append({
+                    'id': pt.id,
+                    'name': pt.name,
+                    'code': pt.code,  # 'incoming', 'outgoing', 'internal'
+                    'sequence': pt.sequence,
+                    'color': pt.color,
+                    'pending_count': pending_count,
+                    'warehouse_id': pt.warehouse_id.id if pt.warehouse_id else None,
+                    'warehouse_name': pt.warehouse_id.name if pt.warehouse_id else '',
+                })
+
+            return {
+                'success': True,
+                'data': types_data,
+                'count': len(types_data)
+            }
+        
+        return self._handle_request(handler)
+
+    @http.route('/api/mobile/pickings/list', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def list_pickings(self, **kwargs):
+        """
+        List stock pickings with optional filters
+        Params: picking_type_id (optional), state (optional), date_from (optional), date_to (optional)
+        """
+        def handler(data):
+            domain = []
+            
+            picking_type_id = data.get('picking_type_id')
+            if picking_type_id:
+                domain.append(('picking_type_id', '=', int(picking_type_id)))
+            
+            state = data.get('state', 'assigned')
+            if state:
+                domain.append(('state', '=', state))
+            
+            date_from = data.get('date_from')
+            if date_from:
+                domain.append(('scheduled_date', '>=', date_from))
+            
+            date_to = data.get('date_to')
+            if date_to:
+                domain.append(('scheduled_date', '<=', date_to))
+
+            pickings = request.env['stock.picking'].search(
+                domain, 
+                order='scheduled_date desc, id desc',
+                limit=100
+            )
+
+            pickings_data = []
+            for picking in pickings:
+                pickings_data.append({
+                    'id': picking.id,
+                    'name': picking.name,
+                    'picking_type_id': picking.picking_type_id.id,
+                    'picking_type_name': picking.picking_type_id.name,
+                    'picking_type_code': picking.picking_type_id.code,
+                    'partner_id': picking.partner_id.id if picking.partner_id else None,
+                    'partner_name': picking.partner_id.name if picking.partner_id else '',
+                    'scheduled_date': picking.scheduled_date.isoformat() if picking.scheduled_date else '',
+                    'origin': picking.origin or '',
+                    'state': picking.state,
+                    'location_id': picking.location_id.id,
+                    'location_name': picking.location_id.complete_name,
+                    'location_dest_id': picking.location_dest_id.id,
+                    'location_dest_name': picking.location_dest_id.complete_name,
+                    'move_count': len(picking.move_ids_without_package),
+                })
+
+            return {
+                'success': True,
+                'data': pickings_data,
+                'count': len(pickings_data)
+            }
+        
+        return self._handle_request(handler)
+
+    @http.route('/api/mobile/pickings/<int:picking_id>', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def get_picking_detail(self, picking_id, **kwargs):
+        """Get detailed information about a specific stock picking"""
+        def handler(data):
+            picking = request.env['stock.picking'].browse(picking_id)
+            if not picking.exists():
+                return {'success': False, 'error': 'Picking not found'}
+
+            lines = []
+            for move in picking.move_ids_without_package:
+                # Calculate quantity_done from move_line_ids
+                quantity_done = sum(move.move_line_ids.mapped('quantity'))
+                
+                # Get tracking type
+                tracking = move.product_id.tracking or 'none'
+                
+                # Get move lines with lot information
+                move_lines = []
+                for ml in move.move_line_ids:
+                    move_lines.append({
+                        'id': ml.id,
+                        'lot_id': ml.lot_id.id if ml.lot_id else None,
+                        'lot_name': ml.lot_id.name if ml.lot_id else None,
+                        'quantity': ml.quantity,
+                    })
+                
+                lines.append({
+                    'id': move.id,
+                    'product_id': move.product_id.id,
+                    'product_name': move.product_id.name,
+                    'product_code': move.product_id.default_code or '',
+                    'product_barcode': move.product_id.barcode or '',
+                    'quantity_expected': move.product_uom_qty,
+                    'quantity_done': quantity_done,
+                    'uom': move.product_uom.name,
+                    'location_id': move.location_id.id,
+                    'location_name': move.location_id.complete_name,
+                    'location_dest_id': move.location_dest_id.id,
+                    'location_dest_name': move.location_dest_id.complete_name,
+                    'state': move.state,
+                    'tracking': tracking,
+                    'move_lines': move_lines,
+                })
+
+            result_data = {
+                'id': picking.id,
+                'name': picking.name,
+                'picking_type_id': picking.picking_type_id.id,
+                'picking_type_name': picking.picking_type_id.name,
+                'picking_type_code': picking.picking_type_id.code,
+                'partner_id': picking.partner_id.id if picking.partner_id else None,
+                'partner_name': picking.partner_id.name if picking.partner_id else '',
+                'scheduled_date': picking.scheduled_date.isoformat() if picking.scheduled_date else '',
+                'origin': picking.origin or '',
+                'state': picking.state,
+                'location_id': picking.location_id.id,
+                'location_name': picking.location_id.complete_name,
+                'location_dest_id': picking.location_dest_id.id,
+                'location_dest_name': picking.location_dest_id.complete_name,
+                'lines': lines,
+            }
+
+            return {'success': True, 'data': result_data}
+        
+        return self._handle_request(handler)
+
+    @http.route('/api/mobile/pickings/<int:picking_id>/update', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def update_picking_line(self, picking_id, **kwargs):
+        """
+        Update quantity done for a picking line
+        Expected params: move_id, quantity_done, lot_name (optional), lot_id (optional)
+        """
+        def handler(data):
+            move_id = data.get('move_id')
+            quantity_done = data.get('quantity_done')
+            lot_name = data.get('lot_name')
+            lot_id = data.get('lot_id')
+
+            if not move_id or quantity_done is None:
+                return {'success': False, 'error': 'Missing required parameters'}
+
+            move = request.env['stock.move'].browse(int(move_id))
+            if not move.exists() or move.picking_id.id != picking_id:
+                return {'success': False, 'error': 'Invalid move line'}
+
+            # Check tracking requirements
+            tracking = move.product_id.tracking
+            if tracking != 'none' and not lot_name and not lot_id:
+                return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
+
+            # Handle lot creation or lookup
+            lot = None
+            if lot_name or lot_id:
+                if lot_id:
+                    lot = request.env['stock.lot'].browse(int(lot_id))
+                    if not lot.exists() or lot.product_id.id != move.product_id.id:
+                        return {'success': False, 'error': 'Invalid lot/serial number'}
+                elif lot_name:
+                    # Search for existing lot or create new one
+                    lot = request.env['stock.lot'].search([
+                        ('name', '=', lot_name),
+                        ('product_id', '=', move.product_id.id),
+                        ('company_id', '=', move.company_id.id)
+                    ], limit=1)
+                    
+                    if not lot:
+                        # Create new lot
+                        lot = request.env['stock.lot'].create({
+                            'name': lot_name,
+                            'product_id': move.product_id.id,
+                            'company_id': move.company_id.id,
+                        })
+
+            # For serial numbers, quantity must be 1
+            qty = float(quantity_done)
+            if tracking == 'serial' and qty != 1:
+                qty = 1.0
+
+            # Create a new move line with the lot
+            request.env['stock.move.line'].create({
+                'move_id': move.id,
+                'product_id': move.product_id.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,
+                'location_dest_id': move.location_dest_id.id,
+                'quantity': qty,
+                'picking_id': picking_id,
+                'lot_id': lot.id if lot else None,
+            })
+
+            # Get updated quantity done
+            updated_qty = sum(move.move_line_ids.mapped('quantity'))
+
+            return {
+                'success': True,
+                'message': 'Quantity updated successfully',
+                'data': {
+                    'move_id': move.id,
+                    'quantity_done': updated_qty,
+                    'lot_name': lot.name if lot else None,
+                    'lot_id': lot.id if lot else None,
+                }
+            }
+        
+        return self._handle_request(handler)
+
+    @http.route('/api/mobile/pickings/<int:picking_id>/scan', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def scan_picking_product(self, picking_id, **kwargs):
+        """
+        Scan a product barcode to add quantity to picking
+        Expected params: barcode, lot_name (optional)
+        """
+        def handler(data):
+            barcode = data.get('barcode')
+            lot_name = data.get('lot_name')
+
+            if not barcode:
+                return {'success': False, 'error': 'Barcode is required'}
+
+            picking = request.env['stock.picking'].browse(picking_id)
+            if not picking.exists():
+                return {'success': False, 'error': 'Picking not found'}
+
+            # Search for product by barcode
+            product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
+            
+            # If not found as product, try as lot/serial number
+            if not product:
+                lot = request.env['stock.lot'].search([('name', '=', barcode)], limit=1)
+                if lot:
+                    product = lot.product_id
+                    lot_name = lot.name  # Use the scanned lot
+                else:
+                    return {'success': False, 'error': 'Product or lot not found with this barcode'}
+
+            # Find the move for this product
+            move = picking.move_ids_without_package.filtered(lambda m: m.product_id.id == product.id)
+            if not move:
+                return {'success': False, 'error': 'Product not found in this picking'}
+
+            move = move[0]  # Take first match
+
+            # Check tracking requirements
+            tracking = product.tracking
+            if tracking != 'none' and not lot_name:
+                return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
+
+            # Handle lot creation or lookup
+            lot = None
+            if lot_name:
+                lot = request.env['stock.lot'].search([
+                    ('name', '=', lot_name),
+                    ('product_id', '=', product.id),
+                    ('company_id', '=', move.company_id.id)
+                ], limit=1)
+                
+                if not lot:
+                    # Create new lot
+                    lot = request.env['stock.lot'].create({
+                        'name': lot_name,
+                        'product_id': product.id,
+                        'company_id': move.company_id.id,
+                    })
+
+            # Determine quantity (1 for serial, 1 for lot by default)
+            qty = 1.0
+
+            # Create a new move line
+            request.env['stock.move.line'].create({
+                'move_id': move.id,
+                'product_id': product.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,
+                'location_dest_id': move.location_dest_id.id,
+                'quantity': qty,
+                'picking_id': picking_id,
+                'lot_id': lot.id if lot else None,
+            })
+
+            # Get updated quantity done
+            updated_qty = sum(move.move_line_ids.mapped('quantity'))
+
+            return {
+                'success': True,
+                'message': 'Product scanned successfully',
+                'data': {
+                    'product_id': product.id,
+                    'product_name': product.name,
+                    'move_id': move.id,
+                    'quantity_done': updated_qty,
+                    'lot_name': lot.name if lot else None,
+                }
+            }
+        
+        return self._handle_request(handler)
+
+    @http.route('/api/mobile/pickings/<int:picking_id>/validate', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def validate_picking(self, picking_id, **kwargs):
+        """Validate/Complete a stock picking operation"""
+        def handler(data):
+            picking = request.env['stock.picking'].browse(picking_id)
+            if not picking.exists():
+                return {'success': False, 'error': 'Picking not found'}
+
+            if picking.state != 'assigned':
+                return {'success': False, 'error': f'Picking is in state {picking.state}, cannot validate'}
+
+            # Validate the picking
+            picking.button_validate()
+
+            return {
+                'success': True,
+                'message': 'Picking validated successfully',
+                'data': {'state': picking.state}
+            }
+        
+        return self._handle_request(handler)
+
+    # ==================== OLD SEPARATE ENDPOINTS (DEPRECATED) ====================
+    # These endpoints are kept for backward compatibility but should be migrated to unified endpoints above
+
     # ==================== RECEIPT OPERATIONS ====================
 
     @http.route('/api/mobile/receipts/list', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
@@ -851,6 +1208,19 @@ class MobileInventoryController(http.Controller):
                 # Calculate quantity_done from move_line_ids
                 quantity_done = sum(move.move_line_ids.mapped('quantity'))
                 
+                # Get tracking type
+                tracking = move.product_id.tracking or 'none'
+                
+                # Get move lines with lot information
+                move_lines = []
+                for ml in move.move_line_ids:
+                    move_lines.append({
+                        'id': ml.id,
+                        'lot_id': ml.lot_id.id if ml.lot_id else None,
+                        'lot_name': ml.lot_id.name if ml.lot_id else None,
+                        'quantity': ml.quantity,
+                    })
+                
                 lines.append({
                     'id': move.id,
                     'product_id': move.product_id.id,
@@ -865,6 +1235,8 @@ class MobileInventoryController(http.Controller):
                     'location_dest_id': move.location_dest_id.id,
                     'location_dest_name': move.location_dest_id.complete_name,
                     'state': move.state,
+                    'tracking': tracking,
+                    'move_lines': move_lines,
                 })
 
             result_data = {
@@ -888,11 +1260,13 @@ class MobileInventoryController(http.Controller):
     def update_transfer_line(self, picking_id, **kwargs):
         """
         Update quantity done for a transfer line
-        Expected params: move_id, quantity_done
+        Expected params: move_id, quantity_done, lot_name (optional), lot_id (optional)
         """
         def handler(data):
             move_id = data.get('move_id')
             quantity_done = data.get('quantity_done')
+            lot_name = data.get('lot_name')
+            lot_id = data.get('lot_id')
 
             if not move_id or quantity_done is None:
                 return {'success': False, 'error': 'Missing required parameters'}
@@ -901,21 +1275,50 @@ class MobileInventoryController(http.Controller):
             if not move.exists() or move.picking_id.id != picking_id:
                 return {'success': False, 'error': 'Invalid move line'}
 
-            # Update or create move lines with the quantity done
-            if move.move_line_ids:
-                # Update existing move line
-                move.move_line_ids[0].write({'quantity': float(quantity_done)})
-            else:
-                # Create a new move line if none exists
-                request.env['stock.move.line'].create({
-                    'move_id': move.id,
-                    'product_id': move.product_id.id,
-                    'product_uom_id': move.product_uom.id,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                    'quantity': float(quantity_done),
-                    'picking_id': picking_id,
-                })
+            # Check tracking requirements
+            tracking = move.product_id.tracking
+            if tracking != 'none' and not lot_name and not lot_id:
+                return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
+
+            # Handle lot creation or lookup
+            lot = None
+            if lot_name or lot_id:
+                if lot_id:
+                    lot = request.env['stock.lot'].browse(int(lot_id))
+                    if not lot.exists() or lot.product_id.id != move.product_id.id:
+                        return {'success': False, 'error': 'Invalid lot/serial number'}
+                elif lot_name:
+                    # Search for existing lot or create new one
+                    lot = request.env['stock.lot'].search([
+                        ('name', '=', lot_name),
+                        ('product_id', '=', move.product_id.id),
+                        ('company_id', '=', move.company_id.id)
+                    ], limit=1)
+                    
+                    if not lot:
+                        # Create new lot
+                        lot = request.env['stock.lot'].create({
+                            'name': lot_name,
+                            'product_id': move.product_id.id,
+                            'company_id': move.company_id.id,
+                        })
+
+            # For serial numbers, quantity must be 1
+            qty = float(quantity_done)
+            if tracking == 'serial' and qty != 1:
+                qty = 1.0
+
+            # Create a new move line with the lot
+            request.env['stock.move.line'].create({
+                'move_id': move.id,
+                'product_id': move.product_id.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,
+                'location_dest_id': move.location_dest_id.id,
+                'quantity': qty,
+                'picking_id': picking_id,
+                'lot_id': lot.id if lot else None,
+            })
 
             # Get updated quantity done
             updated_qty = sum(move.move_line_ids.mapped('quantity'))
@@ -926,6 +1329,98 @@ class MobileInventoryController(http.Controller):
                 'data': {
                     'move_id': move.id,
                     'quantity_done': updated_qty,
+                    'lot_name': lot.name if lot else None,
+                    'lot_id': lot.id if lot else None,
+                }
+            }
+        
+        return self._handle_request(handler)
+
+    @http.route('/api/mobile/transfers/<int:picking_id>/scan', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def scan_transfer_product(self, picking_id, **kwargs):
+        """
+        Scan a product barcode to add quantity to transfer
+        Expected params: barcode, lot_name (optional)
+        """
+        def handler(data):
+            barcode = data.get('barcode')
+            lot_name = data.get('lot_name')
+
+            if not barcode:
+                return {'success': False, 'error': 'Barcode is required'}
+
+            picking = request.env['stock.picking'].browse(picking_id)
+            if not picking.exists():
+                return {'success': False, 'error': 'Transfer not found'}
+
+            # Search for product by barcode
+            product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
+            
+            # If not found as product, try as lot/serial number
+            if not product:
+                lot = request.env['stock.lot'].search([('name', '=', barcode)], limit=1)
+                if lot:
+                    product = lot.product_id
+                    lot_name = lot.name  # Use the scanned lot
+                else:
+                    return {'success': False, 'error': 'Product or lot not found with this barcode'}
+
+            # Find the move for this product
+            move = picking.move_ids_without_package.filtered(lambda m: m.product_id.id == product.id)
+            if not move:
+                return {'success': False, 'error': 'Product not found in this transfer'}
+
+            move = move[0]  # Take first match
+
+            # Check tracking requirements
+            tracking = product.tracking
+            if tracking != 'none' and not lot_name:
+                return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
+
+            # Handle lot creation or lookup
+            lot = None
+            if lot_name:
+                lot = request.env['stock.lot'].search([
+                    ('name', '=', lot_name),
+                    ('product_id', '=', product.id),
+                    ('company_id', '=', move.company_id.id)
+                ], limit=1)
+                
+                if not lot:
+                    # Create new lot
+                    lot = request.env['stock.lot'].create({
+                        'name': lot_name,
+                        'product_id': product.id,
+                        'company_id': move.company_id.id,
+                    })
+
+            # Determine quantity (1 for serial, 1 for lot by default)
+            qty = 1.0
+
+            # Create a new move line
+            request.env['stock.move.line'].create({
+                'move_id': move.id,
+                'product_id': product.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,
+                'location_dest_id': move.location_dest_id.id,
+                'quantity': qty,
+                'picking_id': picking_id,
+                'lot_id': lot.id if lot else None,
+            })
+
+            # Get updated quantity done
+            updated_qty = sum(move.move_line_ids.mapped('quantity'))
+
+            return {
+                'success': True,
+                'message': 'Product scanned successfully',
+                'data': {
+                    'product_id': product.id,
+                    'product_name': product.name,
+                    'move_id': move.id,
+                    'quantity_done': updated_qty,
+                    'lot_name': lot.name if lot else None,
                 }
             }
         

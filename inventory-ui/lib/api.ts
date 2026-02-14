@@ -156,11 +156,26 @@ class OdooApiService {
   async updateReceiptLine(
     pickingId: number,
     moveId: number,
-    quantityDone: number
+    quantityDone: number,
+    lotName?: string,
+    lotId?: number
   ) {
     return this.makeRequest(`/api/mobile/receipts/${pickingId}/update`, {
       move_id: moveId,
       quantity_done: quantityDone,
+      lot_name: lotName,
+      lot_id: lotId,
+    });
+  }
+
+  async scanReceiptProduct(
+    pickingId: number,
+    barcode: string,
+    lotName?: string
+  ) {
+    return this.makeRequest(`/api/mobile/receipts/${pickingId}/scan`, {
+      barcode,
+      lot_name: lotName,
     });
   }
 
@@ -213,11 +228,26 @@ class OdooApiService {
   async updateTransferLine(
     pickingId: number,
     moveId: number,
-    quantityDone: number
+    quantityDone: number,
+    lotName?: string,
+    lotId?: number
   ) {
     return this.makeRequest(`/api/mobile/transfers/${pickingId}/update`, {
       move_id: moveId,
       quantity_done: quantityDone,
+      lot_name: lotName,
+      lot_id: lotId,
+    });
+  }
+
+  async scanTransferProduct(
+    pickingId: number,
+    barcode: string,
+    lotName?: string
+  ) {
+    return this.makeRequest(`/api/mobile/transfers/${pickingId}/scan`, {
+      barcode,
+      lot_name: lotName,
     });
   }
 
@@ -239,6 +269,56 @@ class OdooApiService {
   // Location operations
   async listLocations(usage: string = "internal") {
     return this.makeRequest("/api/mobile/locations/list", { usage });
+  }
+
+  // ========== UNIFIED PICKING OPERATIONS ==========
+  // These new unified endpoints work for all picking types (receipts, deliveries, transfers)
+
+  async getOperationTypes() {
+    return this.makeRequest("/api/mobile/operation-types", {});
+  }
+
+  async listPickings(filters: {
+    picking_type_id?: number;
+    state?: string;
+    date_from?: string;
+    date_to?: string;
+  } = {}) {
+    return this.makeRequest("/api/mobile/pickings/list", filters);
+  }
+
+  async getPickingDetail(pickingId: number) {
+    return this.makeRequest(`/api/mobile/pickings/${pickingId}`, {});
+  }
+
+  async updatePickingLine(
+    pickingId: number,
+    moveId: number,
+    quantityDone: number,
+    lotName?: string,
+    lotId?: number
+  ) {
+    return this.makeRequest(`/api/mobile/pickings/${pickingId}/update`, {
+      move_id: moveId,
+      quantity_done: quantityDone,
+      lot_name: lotName,
+      lot_id: lotId,
+    });
+  }
+
+  async scanPickingProduct(
+    pickingId: number,
+    barcode: string,
+    lotName?: string
+  ) {
+    return this.makeRequest(`/api/mobile/pickings/${pickingId}/scan`, {
+      barcode,
+      lot_name: lotName,
+    });
+  }
+
+  async validatePicking(pickingId: number) {
+    return this.makeRequest(`/api/mobile/pickings/${pickingId}/validate`, {});
   }
 }
 

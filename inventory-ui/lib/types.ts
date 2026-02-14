@@ -39,6 +39,13 @@ export interface Receipt {
   total_lines: number;
 }
 
+export interface MoveLine {
+  id: number;
+  lot_id: number | false;
+  lot_name: string;
+  quantity: number;
+}
+
 export interface ReceiptLine {
   id: number;
   product_id: number;
@@ -51,6 +58,8 @@ export interface ReceiptLine {
   location_dest_id: number;
   location_dest_name: string;
   state: string;
+  tracking: string;
+  move_lines: MoveLine[];
 }
 
 export interface ReceiptDetail {
@@ -94,6 +103,37 @@ export interface Transfer {
   total_lines: number;
 }
 
+export interface TransferLine {
+  id: number;
+  product_id: number;
+  product_name: string;
+  product_code: string;
+  product_barcode: string;
+  quantity_expected: number;
+  quantity_done: number;
+  uom: string;
+  location_id: number;
+  location_name: string;
+  location_dest_id: number;
+  location_dest_name: string;
+  state: string;
+  tracking: string;
+  move_lines: MoveLine[];
+}
+
+export interface TransferDetail {
+  id: number;
+  name: string;
+  scheduled_date: string;
+  origin: string;
+  state: string;
+  location_id: number;
+  location_name: string;
+  location_dest_id: number;
+  location_dest_name: string;
+  lines: TransferLine[];
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -126,4 +166,57 @@ export interface Location {
   complete_name: string;
   usage: string;
   barcode: string;
+}
+
+// ========== UNIFIED PICKING TYPES ==========
+
+export interface OperationType {
+  id: number;
+  name: string;
+  code: string; // 'incoming', 'outgoing', 'internal'
+  sequence: number;
+  color: number;
+  pending_count: number;
+  warehouse_id: number | null;
+  warehouse_name: string;
+}
+
+export interface PickingLine {
+  id: number;
+  product_id: number;
+  product_name: string;
+  product_code: string;
+  product_barcode: string;
+  quantity_expected: number;
+  quantity_done: number;
+  uom: string;
+  location_id: number;
+  location_name: string;
+  location_dest_id: number;
+  location_dest_name: string;
+  state: string;
+  tracking: string;
+  move_lines: MoveLine[];
+}
+
+export interface Picking {
+  id: number;
+  name: string;
+  picking_type_id: number;
+  picking_type_name: string;
+  picking_type_code: string;
+  partner_id: number | null;
+  partner_name: string;
+  scheduled_date: string;
+  origin: string;
+  state: string;
+  location_id: number;
+  location_name: string;
+  location_dest_id: number;
+  location_dest_name: string;
+  move_count: number;
+}
+
+export interface PickingDetail extends Picking {
+  lines: PickingLine[];
 }

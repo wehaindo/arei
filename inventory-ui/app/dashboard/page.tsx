@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Package, PackageCheck, PackageMinus, LogOut, User } from "lucide-react";
+import { Package, PackageCheck, PackageMinus, LogOut, User, ArrowRightLeft } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -34,30 +34,6 @@ export default function DashboardPage() {
   if (!user) {
     return null;
   }
-
-  const operations = [
-    {
-      title: "Receipts",
-      description: "Manage incoming shipments",
-      icon: PackageCheck,
-      href: "/receipts",
-      color: "bg-green-500",
-    },
-    {
-      title: "Deliveries",
-      description: "Process outgoing shipments",
-      icon: PackageMinus,
-      href: "/deliveries",
-      color: "bg-blue-500",
-    },
-    {
-      title: "Transfers",
-      description: "Handle internal transfers",
-      icon: Package,
-      href: "/transfers",
-      color: "bg-purple-500",
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -98,32 +74,30 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {operations.map((operation) => {
-            const Icon = operation.icon;
-            return (
-              <Card
-                key={operation.title}
-                className="cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => router.push(operation.href)}
-              >
-                <CardHeader>
-                  <div
-                    className={`w-12 h-12 ${operation.color} rounded-lg flex items-center justify-center mb-4`}
-                  >
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <CardTitle>{operation.title}</CardTitle>
-                  <CardDescription>{operation.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" variant="outline">
-                    Open
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="grid gap-6 md:grid-cols-1 max-w-2xl mx-auto">
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow border-2"
+            onClick={() => router.push("/transactions")}
+          >
+            <CardHeader>
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <ArrowRightLeft className="w-8 h-8 text-white" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-2xl">Warehouse Operations</CardTitle>
+                  <CardDescription className="text-base">
+                    Manage receipts, deliveries, and internal transfers
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" size="lg">
+                Open Operations
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>
