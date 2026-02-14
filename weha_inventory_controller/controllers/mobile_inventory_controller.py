@@ -45,6 +45,7 @@ class MobileInventoryController(http.Controller):
         try:
             # Validate session for authenticated endpoints
             if require_auth:
+                _logger.info(f"Session check - UID: {request.session.uid}, SID: {request.session.sid}")
                 if not request.session.uid:
                     result = {'success': False, 'error': 'Not authenticated'}
                     response = Response(
@@ -171,7 +172,23 @@ class MobileInventoryController(http.Controller):
                 status=200,
                 mimetype='application/json'
             )
-            return self._apply_cors_headers(response)
+            
+            # Apply CORS headers
+            response = self._apply_cors_headers(response)
+            
+            # Explicitly set session cookie for cross-origin
+            if uid:
+                response.set_cookie(
+                    'session_id',
+                    request.session.sid,
+                    max_age=90 * 24 * 60 * 60,  # 90 days
+                    httponly=True,
+                    samesite='None',
+                    secure=True  # Required for SameSite=None
+                )
+                _logger.info(f"Set session cookie: {request.session.sid}")
+            
+            return response
 
         except Exception as e:
             _logger.error(f"Login error: {str(e)}")
