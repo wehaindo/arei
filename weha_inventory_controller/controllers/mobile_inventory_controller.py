@@ -330,28 +330,28 @@ class MobileInventoryController(http.Controller):
 
     # ==================== DELIVERY OPERATIONS ====================
 
-    @http.route('/api/mobile/deliveries/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def list_deliveries(self, **kwargs):
         """
         List all pending deliveries (outgoing shipments)
         Optional filters: state, partner_id, date_from, date_to
         """
-        try:
+        def handler(data):
             domain = [('picking_type_code', '=', 'outgoing')]
             
-            state = kwargs.get('state', 'assigned')
+            state = data.get('state', 'assigned')
             if state:
                 domain.append(('state', '=', state))
             
-            partner_id = kwargs.get('partner_id')
+            partner_id = data.get('partner_id')
             if partner_id:
                 domain.append(('partner_id', '=', int(partner_id)))
             
-            date_from = kwargs.get('date_from')
+            date_from = data.get('date_from')
             if date_from:
                 domain.append(('scheduled_date', '>=', date_from))
             
-            date_to = kwargs.get('date_to')
+            date_to = data.get('date_to')
             if date_to:
                 domain.append(('scheduled_date', '<=', date_to))
 
@@ -377,14 +377,13 @@ class MobileInventoryController(http.Controller):
                 'data': deliveries,
                 'count': len(deliveries)
             }
-        except Exception as e:
-            _logger.error(f"List deliveries error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def get_delivery_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific delivery"""
-        try:
+        def handler(data):
             picking = request.env['stock.picking'].browse(picking_id)
             if not picking.exists():
                 return {'success': False, 'error': 'Delivery not found'}
@@ -405,7 +404,7 @@ class MobileInventoryController(http.Controller):
                     'state': move.state,
                 })
 
-            data = {
+            result_data = {
                 'id': picking.id,
                 'name': picking.name,
                 'partner_name': picking.partner_id.name if picking.partner_id else '',
@@ -420,20 +419,19 @@ class MobileInventoryController(http.Controller):
                 'lines': lines,
             }
 
-            return {'success': True, 'data': data}
-        except Exception as e:
-            _logger.error(f"Get delivery detail error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+            return {'success': True, 'data': result_data}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>/update', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>/update', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def update_delivery_line(self, picking_id, **kwargs):
         """
         Update quantity done for a delivery line
         Expected params: move_id, quantity_done
         """
-        try:
-            move_id = kwargs.get('move_id')
-            quantity_done = kwargs.get('quantity_done')
+        def handler(data):
+            move_id = data.get('move_id')
+            quantity_done = data.get('quantity_done')
 
             if not move_id or quantity_done is None:
                 return {'success': False, 'error': 'Missing required parameters'}
@@ -452,14 +450,13 @@ class MobileInventoryController(http.Controller):
                     'quantity_done': move.quantity_done,
                 }
             }
-        except Exception as e:
-            _logger.error(f"Update delivery line error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>/validate', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>/validate', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_delivery(self, picking_id, **kwargs):
         """Validate/Complete a delivery operation"""
-        try:
+        def handler(data):
             picking = request.env['stock.picking'].browse(picking_id)
             if not picking.exists():
                 return {'success': False, 'error': 'Delivery not found'}
@@ -475,30 +472,29 @@ class MobileInventoryController(http.Controller):
                 'message': 'Delivery validated successfully',
                 'data': {'state': picking.state}
             }
-        except Exception as e:
-            _logger.error(f"Validate delivery error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
     # ==================== INTERNAL TRANSFER OPERATIONS ====================
 
-    @http.route('/api/mobile/transfers/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def list_internal_transfers(self, **kwargs):
         """
         List all pending internal transfers
         Optional filters: state, date_from, date_to
         """
-        try:
+        def handler(data):
             domain = [('picking_type_code', '=', 'internal')]
             
-            state = kwargs.get('state', 'assigned')
+            state = data.get('state', 'assigned')
             if state:
                 domain.append(('state', '=', state))
             
-            date_from = kwargs.get('date_from')
+            date_from = data.get('date_from')
             if date_from:
                 domain.append(('scheduled_date', '>=', date_from))
             
-            date_to = kwargs.get('date_to')
+            date_to = data.get('date_to')
             if date_to:
                 domain.append(('scheduled_date', '<=', date_to))
 
@@ -524,14 +520,13 @@ class MobileInventoryController(http.Controller):
                 'data': transfers,
                 'count': len(transfers)
             }
-        except Exception as e:
-            _logger.error(f"List transfers error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/transfers/<int:picking_id>', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def get_transfer_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific internal transfer"""
-        try:
+        def handler(data):
             picking = request.env['stock.picking'].browse(picking_id)
             if not picking.exists():
                 return {'success': False, 'error': 'Transfer not found'}
@@ -554,7 +549,7 @@ class MobileInventoryController(http.Controller):
                     'state': move.state,
                 })
 
-            data = {
+            result_data = {
                 'id': picking.id,
                 'name': picking.name,
                 'scheduled_date': picking.scheduled_date.isoformat() if picking.scheduled_date else '',
@@ -567,20 +562,19 @@ class MobileInventoryController(http.Controller):
                 'lines': lines,
             }
 
-            return {'success': True, 'data': data}
-        except Exception as e:
-            _logger.error(f"Get transfer detail error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+            return {'success': True, 'data': result_data}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/transfers/<int:picking_id>/update', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>/update', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def update_transfer_line(self, picking_id, **kwargs):
         """
         Update quantity done for a transfer line
         Expected params: move_id, quantity_done
         """
-        try:
-            move_id = kwargs.get('move_id')
-            quantity_done = kwargs.get('quantity_done')
+        def handler(data):
+            move_id = data.get('move_id')
+            quantity_done = data.get('quantity_done')
 
             if not move_id or quantity_done is None:
                 return {'success': False, 'error': 'Missing required parameters'}
@@ -599,14 +593,13 @@ class MobileInventoryController(http.Controller):
                     'quantity_done': move.quantity_done,
                 }
             }
-        except Exception as e:
-            _logger.error(f"Update transfer line error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/transfers/<int:picking_id>/validate', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>/validate', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_transfer(self, picking_id, **kwargs):
         """Validate/Complete an internal transfer operation"""
-        try:
+        def handler(data):
             picking = request.env['stock.picking'].browse(picking_id)
             if not picking.exists():
                 return {'success': False, 'error': 'Transfer not found'}
@@ -622,21 +615,20 @@ class MobileInventoryController(http.Controller):
                 'message': 'Transfer validated successfully',
                 'data': {'state': picking.state}
             }
-        except Exception as e:
-            _logger.error(f"Validate transfer error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
     # ==================== PRODUCT SEARCH & BARCODE ====================
 
-    @http.route('/api/mobile/products/search', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/products/search', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def search_products(self, **kwargs):
         """
         Search products by name, code, or barcode
         Expected params: query (search term), limit (optional)
         """
-        try:
-            query = kwargs.get('query', '')
-            limit = kwargs.get('limit', 20)
+        def handler(data):
+            query = data.get('query', '')
+            limit = data.get('limit', 20)
 
             if not query:
                 return {'success': False, 'error': 'Search query is required'}
@@ -667,22 +659,21 @@ class MobileInventoryController(http.Controller):
                 'data': products_data,
                 'count': len(products_data)
             }
-        except Exception as e:
-            _logger.error(f"Search products error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/products/<int:product_id>/stock', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/products/<int:product_id>/stock', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def get_product_stock(self, product_id, **kwargs):
         """
         Get stock levels for a product across locations
         Optional params: location_id (filter by specific location)
         """
-        try:
+        def handler(data):
             product = request.env['product.product'].browse(product_id)
             if not product.exists():
                 return {'success': False, 'error': 'Product not found'}
 
-            location_id = kwargs.get('location_id')
+            location_id = data.get('location_id')
             domain = [('product_id', '=', product_id)]
             
             if location_id:
@@ -711,22 +702,21 @@ class MobileInventoryController(http.Controller):
                     'locations': stock_data
                 }
             }
-        except Exception as e:
-            _logger.error(f"Get product stock error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
     # ==================== LOCATIONS ====================
 
-    @http.route('/api/mobile/locations/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/locations/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def list_locations(self, **kwargs):
         """
         List available locations
         Optional params: usage (filter by usage type: internal, supplier, customer, etc.)
         """
-        try:
+        def handler(data):
             domain = []
             
-            usage = kwargs.get('usage')
+            usage = data.get('usage')
             if usage:
                 domain.append(('usage', '=', usage))
             else:
@@ -749,6 +739,5 @@ class MobileInventoryController(http.Controller):
                 'data': locations_data,
                 'count': len(locations_data)
             }
-        except Exception as e:
-            _logger.error(f"List locations error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
