@@ -64,7 +64,7 @@ class MobileInventoryController(http.Controller):
         return token
 
     def _validate_token(self, token):
-        """Validate token and return user_id if valid"""
+        """Validate token and return token data if valid"""
         try:
             token_key = f'mobile_auth_token_{token}'
             token_data_json = request.env['ir.config_parameter'].sudo().get_param(token_key)
@@ -85,7 +85,7 @@ class MobileInventoryController(http.Controller):
                 return False
             
             _logger.info(f"Token validated for user {token_data['user_id']}")
-            return token_data['user_id']
+            return token_data
             
         except Exception as e:
             _logger.error(f"Token validation error: {str(e)}")
@@ -113,9 +113,9 @@ class MobileInventoryController(http.Controller):
                     return self._apply_cors_headers(response)
                 
                 token = auth_header.replace('Bearer ', '')
-                user_id = self._validate_token(token)
+                token_data = self._validate_token(token)
                 
-                if not user_id:
+                if not token_data:
                     result = {'success': False, 'error': 'Invalid or expired token'}
                     response = Response(
                         json.dumps(result),
@@ -124,8 +124,11 @@ class MobileInventoryController(http.Controller):
                     )
                     return self._apply_cors_headers(response)
                 
-                # Set user context for this request
-                request.uid = user_id
+                # Update request environment with authenticated user
+                user_id = token_data['user_id']
+                db = token_data['db']
+                request.update_env(user=user_id)
+                _logger.info(f"Request authenticated for user {user_id}")
             
             # Parse JSON body for POST requests
             data = json.loads(request.httprequest.data) if request.httprequest.data else {}
