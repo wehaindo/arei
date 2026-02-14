@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_stock_picking_user,access_stock_picking_user,stock.model_stock_picking,stock.group_stock_user,1,1,1,1
+access_stock_move_user,access_stock_move_user,stock.model_stock_move,stock.group_stock_user,1,1,1,1
+access_stock_quant_user,access_stock_quant_user,stock.model_stock_quant,stock.group_stock_user,1,1,1,0
+access_product_product_user,access_product_product_user,product.model_product_product,stock.group_stock_user,1,0,0,0
+access_stock_location_user,access_stock_location_user,stock.model_stock_location,stock.group_stock_user,1,0,0,0
