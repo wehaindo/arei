@@ -36,13 +36,24 @@ class MobileInventoryController(http.Controller):
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
 
-    def _handle_request(self, handler_func):
+    def _handle_request(self, handler_func, require_auth=True):
         """Helper to handle OPTIONS preflight and POST requests with CORS"""
         # Handle OPTIONS preflight
         if request.httprequest.method == 'OPTIONS':
             return self._cors_preflight_response()
         
         try:
+            # Validate session for authenticated endpoints
+            if require_auth:
+                if not request.session.uid:
+                    result = {'success': False, 'error': 'Not authenticated'}
+                    response = Response(
+                        json.dumps(result),
+                        status=401,
+                        mimetype='application/json'
+                    )
+                    return self._apply_cors_headers(response)
+            
             # Parse JSON body for POST requests
             data = json.loads(request.httprequest.data) if request.httprequest.data else {}
             
@@ -174,7 +185,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== RECEIPT OPERATIONS ====================
 
-    @http.route('/api/mobile/receipts/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/list', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def list_receipts(self, **kwargs):
         """
         List all pending receipts (incoming shipments)
@@ -224,7 +235,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/receipts/<int:picking_id>', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def get_receipt_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific receipt"""
         def handler(data):
@@ -267,7 +278,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/receipts/<int:picking_id>/update', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>/update', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def update_receipt_line(self, picking_id, **kwargs):
         """
         Update quantity done for a receipt line
@@ -297,7 +308,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/receipts/<int:picking_id>/validate', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>/validate', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_receipt(self, picking_id, **kwargs):
         """Validate/Complete a receipt operation"""
         def handler(data):
@@ -330,7 +341,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== DELIVERY OPERATIONS ====================
 
-    @http.route('/api/mobile/deliveries/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/list', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def list_deliveries(self, **kwargs):
         """
         List all pending deliveries (outgoing shipments)
@@ -380,7 +391,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def get_delivery_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific delivery"""
         def handler(data):
@@ -423,7 +434,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>/update', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>/update', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def update_delivery_line(self, picking_id, **kwargs):
         """
         Update quantity done for a delivery line
@@ -453,7 +464,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>/validate', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>/validate', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_delivery(self, picking_id, **kwargs):
         """Validate/Complete a delivery operation"""
         def handler(data):
@@ -477,7 +488,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== INTERNAL TRANSFER OPERATIONS ====================
 
-    @http.route('/api/mobile/transfers/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/list', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def list_internal_transfers(self, **kwargs):
         """
         List all pending internal transfers
@@ -523,7 +534,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/transfers/<int:picking_id>', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def get_transfer_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific internal transfer"""
         def handler(data):
@@ -566,7 +577,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/transfers/<int:picking_id>/update', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>/update', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def update_transfer_line(self, picking_id, **kwargs):
         """
         Update quantity done for a transfer line
@@ -596,7 +607,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/transfers/<int:picking_id>/validate', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>/validate', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_transfer(self, picking_id, **kwargs):
         """Validate/Complete an internal transfer operation"""
         def handler(data):
@@ -620,7 +631,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== PRODUCT SEARCH & BARCODE ====================
 
-    @http.route('/api/mobile/products/search', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/products/search', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def search_products(self, **kwargs):
         """
         Search products by name, code, or barcode
@@ -662,7 +673,7 @@ class MobileInventoryController(http.Controller):
         
         return self._handle_request(handler)
 
-    @http.route('/api/mobile/products/<int:product_id>/stock', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/products/<int:product_id>/stock', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def get_product_stock(self, product_id, **kwargs):
         """
         Get stock levels for a product across locations
@@ -707,7 +718,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== LOCATIONS ====================
 
-    @http.route('/api/mobile/locations/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/locations/list', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def list_locations(self, **kwargs):
         """
         List available locations
