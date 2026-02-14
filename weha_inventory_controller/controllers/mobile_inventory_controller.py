@@ -17,8 +17,10 @@ class MobileInventoryController(http.Controller):
 
     def _get_cors_headers(self):
         """Get CORS headers for responses"""
+        # Get the origin from the request header
+        origin = request.httprequest.headers.get('Origin', 'http://localhost:3000')
         return {
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': origin,
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Accept',
             'Access-Control-Allow-Credentials': 'true',

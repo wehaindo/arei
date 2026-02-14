@@ -43,7 +43,14 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      console.log('Attempting login with:', { 
+        serverUrl: formData.serverUrl, 
+        db: formData.db, 
+        login: formData.login 
+      });
+      
       const response = await odooApi.login(formData);
+      console.log('Login response:', response);
 
       if (response.success && response.data) {
         toast({
@@ -52,6 +59,7 @@ export default function LoginPage() {
         });
         router.push("/dashboard");
       } else {
+        console.error('Login failed:', response.error);
         toast({
           title: "Login Failed",
           description: response.error || "Invalid credentials",
@@ -59,6 +67,7 @@ export default function LoginPage() {
         });
       }
     } catch (error: any) {
+      console.error('Login exception:', error);
       toast({
         title: "Error",
         description: error.message || "An error occurred during login",

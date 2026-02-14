@@ -25,6 +25,9 @@ class OdooApiService {
   ): Promise<ApiResponse<T>> {
     try {
       const serverUrl = this.getServerUrl();
+      console.log('Making request to:', `${serverUrl}${endpoint}`);
+      console.log('Request params:', params);
+      
       const response = await fetch(`${serverUrl}${endpoint}`, {
         method: "POST",
         headers: {
@@ -37,11 +40,16 @@ class OdooApiService {
         }),
       });
 
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('Response data:', data);
 
       // Handle Odoo JSON-RPC response format
       if (data.result) {
@@ -49,6 +57,7 @@ class OdooApiService {
       }
 
       if (data.error) {
+        console.error('Odoo error:', data.error);
         return {
           success: false,
           error: data.error.data?.message || data.error.message || "Unknown error",
