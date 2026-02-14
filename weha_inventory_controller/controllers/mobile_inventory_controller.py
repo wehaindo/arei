@@ -24,7 +24,7 @@ class MobileInventoryController(http.Controller):
         headers = {
             'Access-Control-Allow-Origin': origin,
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Accept',
+            'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
             'Access-Control-Allow-Credentials': 'true',
             'Access-Control-Max-Age': '86400',
         }
