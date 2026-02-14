@@ -1,15 +1,22 @@
 import { LoginCredentials, LoginResponse, ApiResponse } from "./types";
 
-const ODOO_URL = process.env.NEXT_PUBLIC_ODOO_URL || "http://localhost:8069";
-
 class OdooApiService {
   private sessionId: string | null = null;
+  private serverUrl: string = "http://localhost:8069";
 
   constructor() {
-    // Load session from localStorage on client side
+    // Load session and server config from localStorage on client side
     if (typeof window !== "undefined") {
       this.sessionId = localStorage.getItem("odoo_session_id");
+      this.serverUrl = localStorage.getItem("odoo_server_url") || "http://localhost:8069";
     }
+  }
+
+  private getServerUrl(): string {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("odoo_server_url") || this.serverUrl;
+    }
+    return this.serverUrl;
   }
 
   private async makeRequest<T>(
@@ -17,11 +24,11 @@ class OdooApiService {
     params: any = {}
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${ODOO_URL}${endpoint}`, {
+      const serverUrl = this.getServerUrl();
+      const response = await fetch(`${serverUrl}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(this.sessionId && { Cookie: `session_id=${this.sessionId}` }),
         },
         credentials: "include",
         body: JSON.stringify({
@@ -59,9 +66,20 @@ class OdooApiService {
   }
 
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
+    // Save server URL and database first
+    if (typeof window !== "undefined") {
+      localStorage.setItem("odoo_server_url", credentials.serverUrl);
+      localStorage.setItem("odoo_database", credentials.db);
+      this.serverUrl = credentials.serverUrl;
+    }
+
     const response = await this.makeRequest<LoginResponse["data"]>(
       "/api/mobile/auth/login",
-      credentials
+      {
+        db: credentials.db,
+        login: credentials.login,
+        password: credentials.password
+      }
     );
 
     if (response.success && response.data) {
@@ -80,6 +98,8 @@ class OdooApiService {
     if (typeof window !== "undefined") {
       localStorage.removeItem("odoo_session_id");
       localStorage.removeItem("odoo_user");
+      localStorage.removeItem("odoo_server_url");
+      localStorage.removeItem("odoo_database");
     }
   }
 

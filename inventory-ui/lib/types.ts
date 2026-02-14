@@ -1,4 +1,5 @@
 export interface LoginCredentials {
+  serverUrl: string;
   db: string;
   login: string;
   password: string;

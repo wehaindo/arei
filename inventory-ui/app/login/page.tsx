@@ -21,9 +21,21 @@ export default function LoginPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    db: process.env.NEXT_PUBLIC_ODOO_DB || "",
+    serverUrl: "",
+    db: "",
     login: "",
     password: "",
+  });
+
+  // Load saved configuration on mount
+  useState(() => {
+    if (typeof window !== "undefined") {
+      setFormData(prev => ({
+        ...prev,
+        serverUrl: localStorage.getItem("odoo_server_url") || "http://localhost:8069",
+        db: localStorage.getItem("odoo_database") || "",
+      }));
+    }
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,6 +85,20 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="serverUrl">Server URL</Label>
+              <Input
+                id="serverUrl"
+                type="url"
+                placeholder="http://localhost:8069"
+                value={formData.serverUrl}
+                onChange={(e) =>
+                  setFormData({ ...formData, serverUrl: e.target.value })
+                }
+                required
+                disabled={isLoading}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="db">Database</Label>
               <Input

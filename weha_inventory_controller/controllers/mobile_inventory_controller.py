@@ -15,6 +15,15 @@ class MobileInventoryController(http.Controller):
     Handles Receipt, Delivery, and Internal Transfer operations
     """
 
+    def _get_cors_headers(self):
+        """Get CORS headers for responses"""
+        return {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Accept',
+            'Access-Control-Allow-Credentials': 'true',
+        }
+
     def _authenticate_user(self, db, login, password):
         """Authenticate user and return user_id"""
         try:
@@ -25,12 +34,14 @@ class MobileInventoryController(http.Controller):
             return False
 
     def _make_response(self, data, status=200):
-        """Create JSON response"""
-        return Response(
+        """Create JSON response with CORS headers"""
+        response = Response(
             json.dumps(data, default=str),
             status=status,
             mimetype='application/json'
         )
+        response.headers.update(self._get_cors_headers())
+        return response
 
     def _error_response(self, message, status=400):
         """Create error response"""
@@ -49,7 +60,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== AUTHENTICATION ====================
 
-    @http.route('/api/mobile/auth/login', type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/auth/login', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def mobile_login(self, **kwargs):
         """
         Mobile app login endpoint
@@ -84,7 +95,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== RECEIPT OPERATIONS ====================
 
-    @http.route('/api/mobile/receipts/list', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/receipts/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def list_receipts(self, **kwargs):
         """
         List all pending receipts (incoming shipments)
@@ -135,7 +146,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"List receipts error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/receipts/<int:picking_id>', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def get_receipt_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific receipt"""
         try:
@@ -179,7 +190,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Get receipt detail error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/receipts/<int:picking_id>/update', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>/update', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def update_receipt_line(self, picking_id, **kwargs):
         """
         Update quantity done for a receipt line
@@ -210,7 +221,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Update receipt line error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/receipts/<int:picking_id>/validate', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>/validate', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def validate_receipt(self, picking_id, **kwargs):
         """Validate/Complete a receipt operation"""
         try:
@@ -244,7 +255,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== DELIVERY OPERATIONS ====================
 
-    @http.route('/api/mobile/deliveries/list', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/deliveries/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def list_deliveries(self, **kwargs):
         """
         List all pending deliveries (outgoing shipments)
@@ -295,7 +306,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"List deliveries error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def get_delivery_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific delivery"""
         try:
@@ -339,7 +350,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Get delivery detail error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>/update', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>/update', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def update_delivery_line(self, picking_id, **kwargs):
         """
         Update quantity done for a delivery line
@@ -370,7 +381,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Update delivery line error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/deliveries/<int:picking_id>/validate', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/deliveries/<int:picking_id>/validate', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def validate_delivery(self, picking_id, **kwargs):
         """Validate/Complete a delivery operation"""
         try:
@@ -395,7 +406,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== INTERNAL TRANSFER OPERATIONS ====================
 
-    @http.route('/api/mobile/transfers/list', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/transfers/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def list_internal_transfers(self, **kwargs):
         """
         List all pending internal transfers
@@ -442,7 +453,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"List transfers error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/transfers/<int:picking_id>', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def get_transfer_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific internal transfer"""
         try:
@@ -486,7 +497,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Get transfer detail error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/transfers/<int:picking_id>/update', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>/update', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def update_transfer_line(self, picking_id, **kwargs):
         """
         Update quantity done for a transfer line
@@ -517,7 +528,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Update transfer line error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/transfers/<int:picking_id>/validate', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/transfers/<int:picking_id>/validate', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def validate_transfer(self, picking_id, **kwargs):
         """Validate/Complete an internal transfer operation"""
         try:
@@ -542,7 +553,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== PRODUCT SEARCH & BARCODE ====================
 
-    @http.route('/api/mobile/products/search', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/products/search', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def search_products(self, **kwargs):
         """
         Search products by name, code, or barcode
@@ -585,7 +596,7 @@ class MobileInventoryController(http.Controller):
             _logger.error(f"Search products error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    @http.route('/api/mobile/products/<int:product_id>/stock', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/products/<int:product_id>/stock', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def get_product_stock(self, product_id, **kwargs):
         """
         Get stock levels for a product across locations
@@ -631,7 +642,7 @@ class MobileInventoryController(http.Controller):
 
     # ==================== LOCATIONS ====================
 
-    @http.route('/api/mobile/locations/list', type='json', auth='user', methods=['POST'], csrf=False)
+    @http.route('/api/mobile/locations/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     def list_locations(self, **kwargs):
         """
         List available locations
