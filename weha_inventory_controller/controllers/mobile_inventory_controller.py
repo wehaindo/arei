@@ -335,6 +335,9 @@ class MobileInventoryController(http.Controller):
 
             lines = []
             for move in picking.move_ids_without_package:
+                # Calculate quantity_done from move_line_ids
+                quantity_done = sum(move.move_line_ids.mapped('quantity'))
+                
                 lines.append({
                     'id': move.id,
                     'product_id': move.product_id.id,
@@ -342,7 +345,7 @@ class MobileInventoryController(http.Controller):
                     'product_code': move.product_id.default_code or '',
                     'product_barcode': move.product_id.barcode or '',
                     'quantity_expected': move.product_uom_qty,
-                    'quantity_done': move.quantity_done,
+                    'quantity_done': quantity_done,
                     'uom': move.product_uom.name,
                     'location_dest_id': move.location_dest_id.id,
                     'location_dest_name': move.location_dest_id.complete_name,
@@ -385,14 +388,31 @@ class MobileInventoryController(http.Controller):
             if not move.exists() or move.picking_id.id != picking_id:
                 return {'success': False, 'error': 'Invalid move line'}
 
-            move.write({'quantity_done': float(quantity_done)})
+            # Update or create move lines with the quantity done
+            if move.move_line_ids:
+                # Update existing move line
+                move.move_line_ids[0].write({'quantity': float(quantity_done)})
+            else:
+                # Create a new move line if none exists
+                request.env['stock.move.line'].create({
+                    'move_id': move.id,
+                    'product_id': move.product_id.id,
+                    'product_uom_id': move.product_uom.id,
+                    'location_id': move.location_id.id,
+                    'location_dest_id': move.location_dest_id.id,
+                    'quantity': float(quantity_done),
+                    'picking_id': picking_id,
+                })
+
+            # Get updated quantity done
+            updated_qty = sum(move.move_line_ids.mapped('quantity'))
 
             return {
                 'success': True,
                 'message': 'Quantity updated successfully',
                 'data': {
                     'move_id': move.id,
-                    'quantity_done': move.quantity_done,
+                    'quantity_done': updated_qty,
                 }
             }
         
@@ -491,6 +511,9 @@ class MobileInventoryController(http.Controller):
 
             lines = []
             for move in picking.move_ids_without_package:
+                # Calculate quantity_done from move_line_ids
+                quantity_done = sum(move.move_line_ids.mapped('quantity'))
+                
                 lines.append({
                     'id': move.id,
                     'product_id': move.product_id.id,
@@ -498,7 +521,7 @@ class MobileInventoryController(http.Controller):
                     'product_code': move.product_id.default_code or '',
                     'product_barcode': move.product_id.barcode or '',
                     'quantity_expected': move.product_uom_qty,
-                    'quantity_done': move.quantity_done,
+                    'quantity_done': quantity_done,
                     'uom': move.product_uom.name,
                     'location_id': move.location_id.id,
                     'location_name': move.location_id.complete_name,
@@ -541,14 +564,31 @@ class MobileInventoryController(http.Controller):
             if not move.exists() or move.picking_id.id != picking_id:
                 return {'success': False, 'error': 'Invalid move line'}
 
-            move.write({'quantity_done': float(quantity_done)})
+            # Update or create move lines with the quantity done
+            if move.move_line_ids:
+                # Update existing move line
+                move.move_line_ids[0].write({'quantity': float(quantity_done)})
+            else:
+                # Create a new move line if none exists
+                request.env['stock.move.line'].create({
+                    'move_id': move.id,
+                    'product_id': move.product_id.id,
+                    'product_uom_id': move.product_uom.id,
+                    'location_id': move.location_id.id,
+                    'location_dest_id': move.location_dest_id.id,
+                    'quantity': float(quantity_done),
+                    'picking_id': picking_id,
+                })
+
+            # Get updated quantity done
+            updated_qty = sum(move.move_line_ids.mapped('quantity'))
 
             return {
                 'success': True,
                 'message': 'Quantity updated successfully',
                 'data': {
                     'move_id': move.id,
-                    'quantity_done': move.quantity_done,
+                    'quantity_done': updated_qty,
                 }
             }
         
@@ -636,6 +676,9 @@ class MobileInventoryController(http.Controller):
 
             lines = []
             for move in picking.move_ids_without_package:
+                # Calculate quantity_done from move_line_ids
+                quantity_done = sum(move.move_line_ids.mapped('quantity'))
+                
                 lines.append({
                     'id': move.id,
                     'product_id': move.product_id.id,
@@ -643,7 +686,7 @@ class MobileInventoryController(http.Controller):
                     'product_code': move.product_id.default_code or '',
                     'product_barcode': move.product_id.barcode or '',
                     'quantity_expected': move.product_uom_qty,
-                    'quantity_done': move.quantity_done,
+                    'quantity_done': quantity_done,
                     'uom': move.product_uom.name,
                     'location_id': move.location_id.id,
                     'location_name': move.location_id.complete_name,
@@ -686,14 +729,31 @@ class MobileInventoryController(http.Controller):
             if not move.exists() or move.picking_id.id != picking_id:
                 return {'success': False, 'error': 'Invalid move line'}
 
-            move.write({'quantity_done': float(quantity_done)})
+            # Update or create move lines with the quantity done
+            if move.move_line_ids:
+                # Update existing move line
+                move.move_line_ids[0].write({'quantity': float(quantity_done)})
+            else:
+                # Create a new move line if none exists
+                request.env['stock.move.line'].create({
+                    'move_id': move.id,
+                    'product_id': move.product_id.id,
+                    'product_uom_id': move.product_uom.id,
+                    'location_id': move.location_id.id,
+                    'location_dest_id': move.location_dest_id.id,
+                    'quantity': float(quantity_done),
+                    'picking_id': picking_id,
+                })
+
+            # Get updated quantity done
+            updated_qty = sum(move.move_line_ids.mapped('quantity'))
 
             return {
                 'success': True,
                 'message': 'Quantity updated successfully',
                 'data': {
                     'move_id': move.id,
-                    'quantity_done': move.quantity_done,
+                    'quantity_done': updated_qty,
                 }
             }
         
