@@ -36,6 +36,37 @@ class MobileInventoryController(http.Controller):
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
 
+    def _handle_request(self, handler_func):
+        """Helper to handle OPTIONS preflight and POST requests with CORS"""
+        # Handle OPTIONS preflight
+        if request.httprequest.method == 'OPTIONS':
+            return self._cors_preflight_response()
+        
+        try:
+            # Parse JSON body for POST requests
+            data = json.loads(request.httprequest.data) if request.httprequest.data else {}
+            
+            # Call the handler function
+            result = handler_func(data)
+            
+            # Return response with CORS headers
+            response = Response(
+                json.dumps(result),
+                status=200,
+                mimetype='application/json'
+            )
+            return self._apply_cors_headers(response)
+            
+        except Exception as e:
+            _logger.error(f"Request error: {str(e)}")
+            result = {'success': False, 'error': str(e)}
+            response = Response(
+                json.dumps(result),
+                status=500,
+                mimetype='application/json'
+            )
+            return self._apply_cors_headers(response)
+
     def _authenticate_user(self, db, login, password):
         """Authenticate user and return user_id"""
         try:
@@ -143,28 +174,28 @@ class MobileInventoryController(http.Controller):
 
     # ==================== RECEIPT OPERATIONS ====================
 
-    @http.route('/api/mobile/receipts/list', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/list', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def list_receipts(self, **kwargs):
         """
         List all pending receipts (incoming shipments)
         Optional filters: state, partner_id, date_from, date_to
         """
-        try:
+        def handler(data):
             domain = [('picking_type_code', '=', 'incoming')]
             
-            state = kwargs.get('state', 'assigned')
+            state = data.get('state', 'assigned')
             if state:
                 domain.append(('state', '=', state))
             
-            partner_id = kwargs.get('partner_id')
+            partner_id = data.get('partner_id')
             if partner_id:
                 domain.append(('partner_id', '=', int(partner_id)))
             
-            date_from = kwargs.get('date_from')
+            date_from = data.get('date_from')
             if date_from:
                 domain.append(('scheduled_date', '>=', date_from))
             
-            date_to = kwargs.get('date_to')
+            date_to = data.get('date_to')
             if date_to:
                 domain.append(('scheduled_date', '<=', date_to))
 
@@ -190,14 +221,13 @@ class MobileInventoryController(http.Controller):
                 'data': receipts,
                 'count': len(receipts)
             }
-        except Exception as e:
-            _logger.error(f"List receipts error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/receipts/<int:picking_id>', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def get_receipt_detail(self, picking_id, **kwargs):
         """Get detailed information about a specific receipt"""
-        try:
+        def handler(data):
             picking = request.env['stock.picking'].browse(picking_id)
             if not picking.exists():
                 return {'success': False, 'error': 'Receipt not found'}
@@ -218,7 +248,7 @@ class MobileInventoryController(http.Controller):
                     'state': move.state,
                 })
 
-            data = {
+            result_data = {
                 'id': picking.id,
                 'name': picking.name,
                 'partner_name': picking.partner_id.name if picking.partner_id else '',
@@ -233,20 +263,19 @@ class MobileInventoryController(http.Controller):
                 'lines': lines,
             }
 
-            return {'success': True, 'data': data}
-        except Exception as e:
-            _logger.error(f"Get receipt detail error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+            return {'success': True, 'data': result_data}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/receipts/<int:picking_id>/update', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>/update', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def update_receipt_line(self, picking_id, **kwargs):
         """
         Update quantity done for a receipt line
         Expected params: move_id, quantity_done
         """
-        try:
-            move_id = kwargs.get('move_id')
-            quantity_done = kwargs.get('quantity_done')
+        def handler(data):
+            move_id = data.get('move_id')
+            quantity_done = data.get('quantity_done')
 
             if not move_id or quantity_done is None:
                 return {'success': False, 'error': 'Missing required parameters'}
@@ -265,14 +294,13 @@ class MobileInventoryController(http.Controller):
                     'quantity_done': move.quantity_done,
                 }
             }
-        except Exception as e:
-            _logger.error(f"Update receipt line error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
-    @http.route('/api/mobile/receipts/<int:picking_id>/validate', type='json', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
+    @http.route('/api/mobile/receipts/<int:picking_id>/validate', type='http', auth='user', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_receipt(self, picking_id, **kwargs):
         """Validate/Complete a receipt operation"""
-        try:
+        def handler(data):
             picking = request.env['stock.picking'].browse(picking_id)
             if not picking.exists():
                 return {'success': False, 'error': 'Receipt not found'}
@@ -297,9 +325,8 @@ class MobileInventoryController(http.Controller):
                 'message': 'Receipt validated successfully',
                 'data': {'state': picking.state}
             }
-        except Exception as e:
-            _logger.error(f"Validate receipt error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+        
+        return self._handle_request(handler)
 
     # ==================== DELIVERY OPERATIONS ====================
 
