@@ -467,7 +467,7 @@ class MobileInventoryController(http.Controller):
             if tracking != 'none' and not lot_name and not lot_id:
                 return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
 
-            # Handle lot creation or lookup
+            # Handle lot lookup only (don't create new lots)
             lot = None
             if lot_name or lot_id:
                 if lot_id:
@@ -475,20 +475,14 @@ class MobileInventoryController(http.Controller):
                     if not lot.exists() or lot.product_id.id != move.product_id.id:
                         return {'success': False, 'error': 'Invalid lot/serial number'}
                 elif lot_name:
-                    # Search for existing lot or create new one
+                    # Search for existing lot only
                     lot = request.env['stock.lot'].search([
                         ('name', '=', lot_name),
-                        ('product_id', '=', move.product_id.id),
-                        ('company_id', '=', move.company_id.id)
+                        ('product_id', '=', move.product_id.id)
                     ], limit=1)
                     
                     if not lot:
-                        # Create new lot
-                        lot = request.env['stock.lot'].create({
-                            'name': lot_name,
-                            'product_id': move.product_id.id,
-                            'company_id': move.company_id.id,
-                        })
+                        return {'success': False, 'error': f'Lot/Serial number "{lot_name}" not found for this product'}
 
             # For serial numbers, quantity must be 1
             qty = float(quantity_done)
@@ -564,22 +558,17 @@ class MobileInventoryController(http.Controller):
             if tracking != 'none' and not lot_name:
                 return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
 
-            # Handle lot creation or lookup
+            # Handle lot lookup only (don't create new lots)
             lot = None
             if lot_name:
+                # Search for existing lot only
                 lot = request.env['stock.lot'].search([
                     ('name', '=', lot_name),
-                    ('product_id', '=', product.id),
-                    ('company_id', '=', move.company_id.id)
+                    ('product_id', '=', product.id)
                 ], limit=1)
                 
                 if not lot:
-                    # Create new lot
-                    lot = request.env['stock.lot'].create({
-                        'name': lot_name,
-                        'product_id': product.id,
-                        'company_id': move.company_id.id,
-                    })
+                    return {'success': False, 'error': f'Lot/Serial number "{lot_name}" not found for this product'}
 
             # Determine quantity (1 for serial, 1 for lot by default)
             qty = 1.0
@@ -1292,7 +1281,7 @@ class MobileInventoryController(http.Controller):
             if tracking != 'none' and not lot_name and not lot_id:
                 return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
 
-            # Handle lot creation or lookup
+            # Handle lot lookup only (don't create new lots)
             lot = None
             if lot_name or lot_id:
                 if lot_id:
@@ -1300,20 +1289,14 @@ class MobileInventoryController(http.Controller):
                     if not lot.exists() or lot.product_id.id != move.product_id.id:
                         return {'success': False, 'error': 'Invalid lot/serial number'}
                 elif lot_name:
-                    # Search for existing lot or create new one
+                    # Search for existing lot only
                     lot = request.env['stock.lot'].search([
                         ('name', '=', lot_name),
-                        ('product_id', '=', move.product_id.id),
-                        ('company_id', '=', move.company_id.id)
+                        ('product_id', '=', move.product_id.id)
                     ], limit=1)
                     
                     if not lot:
-                        # Create new lot
-                        lot = request.env['stock.lot'].create({
-                            'name': lot_name,
-                            'product_id': move.product_id.id,
-                            'company_id': move.company_id.id,
-                        })
+                        return {'success': False, 'error': f'Lot/Serial number "{lot_name}" not found for this product'}
 
             # For serial numbers, quantity must be 1
             qty = float(quantity_done)
@@ -1389,22 +1372,17 @@ class MobileInventoryController(http.Controller):
             if tracking != 'none' and not lot_name:
                 return {'success': False, 'error': f'Lot/Serial number is required for this product (tracking: {tracking})'}
 
-            # Handle lot creation or lookup
+            # Handle lot lookup only (don't create new lots)
             lot = None
             if lot_name:
+                # Search for existing lot only
                 lot = request.env['stock.lot'].search([
                     ('name', '=', lot_name),
-                    ('product_id', '=', product.id),
-                    ('company_id', '=', move.company_id.id)
+                    ('product_id', '=', product.id)
                 ], limit=1)
                 
                 if not lot:
-                    # Create new lot
-                    lot = request.env['stock.lot'].create({
-                        'name': lot_name,
-                        'product_id': product.id,
-                        'company_id': move.company_id.id,
-                    })
+                    return {'success': False, 'error': f'Lot/Serial number "{lot_name}" not found for this product'}
 
             # Determine quantity (1 for serial, 1 for lot by default)
             qty = 1.0
