@@ -39,12 +39,20 @@ class MobileInventoryController(http.Controller):
     def _authenticate_user(self, db, login, password):
         """Authenticate user and return user_id"""
         try:
-            # Odoo 18 authentication - set database on session first
-            if not db:
+            # Odoo 18 authentication - database is set via context, not as parameter
+            from odoo.http import db_filter, db_list
+            
+            # Verify database exists
+            dbs = db_list(force=True)
+            if db not in dbs:
+                _logger.error(f"Database '{db}' not found")
                 return False
             
-            # Authenticate with the specified database
-            uid = request.session.authenticate(db, login, password)
+            # Set database in session
+            request.session.db = db
+            
+            # Authenticate with login and password only (Odoo 18 signature)
+            uid = request.session.authenticate(login, password)
             return uid
         except Exception as e:
             _logger.error(f"Authentication failed: {str(e)}")
@@ -65,11 +73,16 @@ class MobileInventoryController(http.Controller):
         try:
             # Parse JSON body
             data = json.loads(request.httprequest.data.decode('utf-8'))
+            _logger.info(f"Received login data: {data}")
+            
             params = data.get('params', {})
+            _logger.info(f"Extracted params: {params}")
             
             db = params.get('db')
             login = params.get('login')
             password = params.get('password')
+            
+            _logger.info(f"Login attempt - DB: {db}, Login: {login}")
 
             if not all([db, login, password]):
                 result = {'success': False, 'error': 'Missing required parameters'}
@@ -106,23 +119,6 @@ class MobileInventoryController(http.Controller):
                 mimetype='application/json'
             )
             return self._apply_cors_headers(response)
-            if uid:
-                user = request.env['res.users'].sudo().browse(uid)
-                return {
-                    'success': True,
-                    'data': {
-                        'user_id': uid,
-                        'session_id': request.session.sid,
-                        'user_name': user.name,
-                        'company_id': user.company_id.id,
-                        'company_name': user.company_id.name,
-                    }
-                }
-            else:
-                return {'success': False, 'error': 'Invalid credentials'}
-        except Exception as e:
-            _logger.error(f"Login error: {str(e)}")
-            return {'success': False, 'error': str(e)}
 
     # ==================== RECEIPT OPERATIONS ====================
 
