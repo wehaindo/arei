@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ export default function LoginPage() {
   });
 
   // Load saved configuration on mount
-  useState(() => {
+  useEffect(() => {
     if (typeof window !== "undefined") {
       setFormData(prev => ({
         ...prev,
@@ -36,7 +36,7 @@ export default function LoginPage() {
         db: localStorage.getItem("odoo_database") || "",
       }));
     }
-  });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
