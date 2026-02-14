@@ -106,10 +106,17 @@ class MobileInventoryController(http.Controller):
                 uid = auth_info['uid']
                 _logger.info(f"Authentication successful for user: {login} (uid: {uid})")
                 
-                # Update session
+                # Ensure session is properly saved with database context
                 request.session.db = db
-                request.session.uid = uid
-                request.session.login = login
+                
+                # Get registry and rotate session to ensure it's saved
+                registry = odoo.modules.registry.Registry(db)
+                with registry.cursor() as cr:
+                    env = odoo.api.Environment(cr, uid, request.session.context)
+                    # Rotate session to ensure it's properly saved
+                    http.root.session_store.rotate(request.session, env)
+                
+                _logger.info(f"Session saved - DB: {request.session.db}, UID: {request.session.uid}")
                 
                 return uid
             else:
