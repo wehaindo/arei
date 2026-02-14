@@ -1,13 +1,13 @@
 import { LoginCredentials, LoginResponse, ApiResponse } from "./types";
 
 class OdooApiService {
-  private sessionId: string | null = null;
+  private token: string | null = null;
   private serverUrl: string = "http://localhost:8069";
 
   constructor() {
-    // Load session and server config from localStorage on client side
+    // Load token and server config from localStorage on client side
     if (typeof window !== "undefined") {
-      this.sessionId = localStorage.getItem("odoo_session_id");
+      this.token = localStorage.getItem("odoo_token");
       this.serverUrl = localStorage.getItem("odoo_server_url") || "http://localhost:8069";
     }
   }
@@ -28,12 +28,18 @@ class OdooApiService {
       console.log('Making request to:', `${serverUrl}${endpoint}`);
       console.log('Request params:', params);
       
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      
+      // Add Authorization header if token exists
+      if (this.token) {
+        headers["Authorization"] = `Bearer ${this.token}`;
+      }
+      
       const response = await fetch(`${serverUrl}${endpoint}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
+        headers,
         body: JSON.stringify({
           jsonrpc: "2.0",
           params,
@@ -92,9 +98,9 @@ class OdooApiService {
     );
 
     if (response.success && response.data) {
-      this.sessionId = response.data.session_id;
+      this.token = response.data.token;
       if (typeof window !== "undefined") {
-        localStorage.setItem("odoo_session_id", response.data.session_id);
+        localStorage.setItem("odoo_token", response.data.token);
         localStorage.setItem("odoo_user", JSON.stringify(response.data));
       }
     }
@@ -103,9 +109,9 @@ class OdooApiService {
   }
 
   logout() {
-    this.sessionId = null;
+    this.token = null;
     if (typeof window !== "undefined") {
-      localStorage.removeItem("odoo_session_id");
+      localStorage.removeItem("odoo_token");
       localStorage.removeItem("odoo_user");
       localStorage.removeItem("odoo_server_url");
       localStorage.removeItem("odoo_database");
@@ -121,7 +127,16 @@ class OdooApiService {
   }
 
   isAuthenticated(): boolean {
-    return !!this.sessionId;
+    return !!this.token;
+  }
+
+  // Internal Transfers operations (alias for backward compatibility)
+  async listInternalTransfers(params: {
+    state?: string;
+    date_from?: string;
+    date_to?: string;
+  } = {}) {
+    return this.listTransfers(params);
   }
 
   // Receipt operations

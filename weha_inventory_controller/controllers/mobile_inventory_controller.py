@@ -2,6 +2,9 @@
 
 import json
 import logging
+import secrets
+import hashlib
+from datetime import datetime, timedelta
 from odoo import http
 from odoo.http import request, Response
 import werkzeug.wrappers
@@ -32,9 +35,61 @@ class MobileInventoryController(http.Controller):
         origin = request.httprequest.headers.get('Origin', '*')
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Accept'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Accept, Authorization'
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
+
+    def _generate_token(self, db, user_id):
+        """Generate a secure token for user"""
+        # Generate random token
+        token = secrets.token_urlsafe(32)
+        
+        # Store token in ir.config_parameter with expiry (90 days)
+        expiry = datetime.now() + timedelta(days=90)
+        token_key = f'mobile_auth_token_{token}'
+        
+        token_data = {
+            'user_id': user_id,
+            'db': db,
+            'expiry': expiry.isoformat(),
+        }
+        
+        # Store in database
+        request.env['ir.config_parameter'].sudo().set_param(
+            token_key,
+            json.dumps(token_data)
+        )
+        
+        _logger.info(f"Generated token for user {user_id}: {token[:10]}...")
+        return token
+
+    def _validate_token(self, token):
+        """Validate token and return user_id if valid"""
+        try:
+            token_key = f'mobile_auth_token_{token}'
+            token_data_json = request.env['ir.config_parameter'].sudo().get_param(token_key)
+            
+            if not token_data_json:
+                _logger.warning(f"Token not found: {token[:10]}...")
+                return False
+            
+            token_data = json.loads(token_data_json)
+            expiry = datetime.fromisoformat(token_data['expiry'])
+            
+            if datetime.now() > expiry:
+                _logger.warning(f"Token expired: {token[:10]}...")
+                # Delete expired token
+                request.env['ir.config_parameter'].sudo().search([
+                    ('key', '=', token_key)
+                ]).unlink()
+                return False
+            
+            _logger.info(f"Token validated for user {token_data['user_id']}")
+            return token_data['user_id']
+            
+        except Exception as e:
+            _logger.error(f"Token validation error: {str(e)}")
+            return False
 
     def _handle_request(self, handler_func, require_auth=True):
         """Helper to handle OPTIONS preflight and POST requests with CORS"""
@@ -43,17 +98,34 @@ class MobileInventoryController(http.Controller):
             return self._cors_preflight_response()
         
         try:
-            # Validate session for authenticated endpoints
+            # Validate token for authenticated endpoints
             if require_auth:
-                _logger.info(f"Session check - UID: {request.session.uid}, SID: {request.session.sid}")
-                if not request.session.uid:
-                    result = {'success': False, 'error': 'Not authenticated'}
+                auth_header = request.httprequest.headers.get('Authorization')
+                _logger.info(f"Authorization header: {auth_header}")
+                
+                if not auth_header or not auth_header.startswith('Bearer '):
+                    result = {'success': False, 'error': 'Missing or invalid authorization token'}
                     response = Response(
                         json.dumps(result),
                         status=401,
                         mimetype='application/json'
                     )
                     return self._apply_cors_headers(response)
+                
+                token = auth_header.replace('Bearer ', '')
+                user_id = self._validate_token(token)
+                
+                if not user_id:
+                    result = {'success': False, 'error': 'Invalid or expired token'}
+                    response = Response(
+                        json.dumps(result),
+                        status=401,
+                        mimetype='application/json'
+                    )
+                    return self._apply_cors_headers(response)
+                
+                # Set user context for this request
+                request.uid = user_id
             
             # Parse JSON body for POST requests
             data = json.loads(request.httprequest.data) if request.httprequest.data else {}
@@ -157,20 +229,26 @@ class MobileInventoryController(http.Controller):
 
             if not all([db, login, password]):
                 result = {'success': False, 'error': 'Missing required parameters'}
+                uid = None
             else:
                 uid = self._authenticate_user(db, login, password)
                 if uid:
+                    # Generate token
+                    token = self._generate_token(db, uid)
+                    
                     user = request.env['res.users'].sudo().browse(uid)
                     result = {
                         'success': True,
                         'data': {
                             'user_id': uid,
-                            'session_id': request.session.sid,
+                            'token': token,
                             'user_name': user.name,
+                            'login': user.login,
                             'company_id': user.company_id.id,
                             'company_name': user.company_id.name,
                         }
                     }
+                    _logger.info(f"Login successful for user {uid}, token generated")
                 else:
                     result = {'success': False, 'error': 'Invalid credentials'}
 
@@ -180,22 +258,7 @@ class MobileInventoryController(http.Controller):
                 mimetype='application/json'
             )
             
-            # Apply CORS headers
-            response = self._apply_cors_headers(response)
-            
-            # Explicitly set session cookie for cross-origin
-            if uid:
-                response.set_cookie(
-                    'session_id',
-                    request.session.sid,
-                    max_age=90 * 24 * 60 * 60,  # 90 days
-                    httponly=True,
-                    samesite='None',
-                    secure=True  # Required for SameSite=None
-                )
-                _logger.info(f"Set session cookie: {request.session.sid}")
-            
-            return response
+            return self._apply_cors_headers(response)
 
         except Exception as e:
             _logger.error(f"Login error: {str(e)}")
@@ -218,7 +281,7 @@ class MobileInventoryController(http.Controller):
         def handler(data):
             domain = [('picking_type_code', '=', 'incoming')]
             
-            state = data.get('state', 'assigned')
+            state = data.get('state')
             if state:
                 domain.append(('state', '=', state))
             
@@ -374,7 +437,7 @@ class MobileInventoryController(http.Controller):
         def handler(data):
             domain = [('picking_type_code', '=', 'outgoing')]
             
-            state = data.get('state', 'assigned')
+            state = data.get('state')
             if state:
                 domain.append(('state', '=', state))
             
@@ -521,7 +584,7 @@ class MobileInventoryController(http.Controller):
         def handler(data):
             domain = [('picking_type_code', '=', 'internal')]
             
-            state = data.get('state', 'assigned')
+            state = data.get('state')
             if state:
                 domain.append(('state', '=', state))
             
@@ -533,7 +596,9 @@ class MobileInventoryController(http.Controller):
             if date_to:
                 domain.append(('scheduled_date', '<=', date_to))
 
+            _logger.info(f"Searching internal transfers with domain: {domain}")
             pickings = request.env['stock.picking'].search(domain, order='scheduled_date desc')
+            _logger.info(f"Found {len(pickings)} internal transfers")
             
             transfers = []
             for picking in pickings:

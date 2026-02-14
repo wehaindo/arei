@@ -9,8 +9,9 @@ export interface LoginResponse {
   success: boolean;
   data?: {
     user_id: number;
-    session_id: string;
+    token: string;
     user_name: string;
+    login: string;
     company_id: number;
     company_name: string;
   };
