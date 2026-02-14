@@ -39,30 +39,44 @@ class MobileInventoryController(http.Controller):
     def _authenticate_user(self, db, login, password):
         """Authenticate user and return user_id"""
         try:
-            from odoo.http import db_filter, db_list
-            from odoo.service import security
+            from odoo.http import db_list, db_filter
+            import odoo
             
-            # Verify database exists
-            dbs = db_list(force=True)
-            if db not in dbs:
-                _logger.error(f"Database '{db}' not found in available databases: {dbs}")
+            _logger.info(f"Attempting authentication for user: {login} on database: {db}")
+            
+            # Close existing cursor if switching databases
+            if request.db and request.db != db:
+                request.env.cr.close()
+            elif request.db:
+                request.env.cr.rollback()
+            
+            # Verify database is accessible
+            if not db_filter([db]):
+                _logger.error(f"Database not found: {db}")
                 return False
             
-            # Use Odoo's security check_credentials method
-            # This is the proper way in Odoo 18
-            uid = security.check_credentials(db, login, password)
+            # Authenticate using request.session (same as Odoo's web controller)
+            credential = {'login': login, 'password': password, 'type': 'password'}
+            auth_info = request.session.authenticate(db, credential)
             
-            if uid:
-                # Set the database in session after successful authentication
+            if auth_info and auth_info.get('uid'):
+                uid = auth_info['uid']
+                _logger.info(f"Authentication successful for user: {login} (uid: {uid})")
+                
+                # Update session
                 request.session.db = db
                 request.session.uid = uid
                 request.session.login = login
-                request.session.context = request.env['res.users'].sudo().browse(uid).context_get()
                 
-            return uid
+                return uid
+            else:
+                _logger.warning(f"Authentication failed for user: {login}")
+                return False
             
         except Exception as e:
             _logger.error(f"Authentication failed: {str(e)}")
+            import traceback
+            _logger.error(traceback.format_exc())
             return False
 
     # ==================== AUTHENTICATION ====================
