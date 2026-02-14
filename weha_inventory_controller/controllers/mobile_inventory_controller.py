@@ -338,6 +338,16 @@ class MobileInventoryController(http.Controller):
                 # Calculate quantity_done from move_line_ids
                 quantity_done = sum(move.move_line_ids.mapped('quantity'))
                 
+                # Get existing move lines with lot info
+                move_lines_detail = []
+                for ml in move.move_line_ids:
+                    move_lines_detail.append({
+                        'id': ml.id,
+                        'lot_id': ml.lot_id.id if ml.lot_id else False,
+                        'lot_name': ml.lot_id.name if ml.lot_id else ml.lot_name or '',
+                        'quantity': ml.quantity,
+                    })
+                
                 lines.append({
                     'id': move.id,
                     'product_id': move.product_id.id,
@@ -350,6 +360,8 @@ class MobileInventoryController(http.Controller):
                     'location_dest_id': move.location_dest_id.id,
                     'location_dest_name': move.location_dest_id.complete_name,
                     'state': move.state,
+                    'tracking': move.product_id.tracking,
+                    'move_lines': move_lines_detail,
                 })
 
             result_data = {
@@ -375,11 +387,13 @@ class MobileInventoryController(http.Controller):
     def update_receipt_line(self, picking_id, **kwargs):
         """
         Update quantity done for a receipt line
-        Expected params: move_id, quantity_done
+        Expected params: move_id, quantity_done, lot_name (optional), lot_id (optional)
         """
         def handler(data):
             move_id = data.get('move_id')
             quantity_done = data.get('quantity_done')
+            lot_name = data.get('lot_name', '')
+            lot_id = data.get('lot_id')
 
             if not move_id or quantity_done is None:
                 return {'success': False, 'error': 'Missing required parameters'}
@@ -388,24 +402,77 @@ class MobileInventoryController(http.Controller):
             if not move.exists() or move.picking_id.id != picking_id:
                 return {'success': False, 'error': 'Invalid move line'}
 
-            # Update or create move lines with the quantity done
-            if move.move_line_ids:
-                # Update existing move line
-                move.move_line_ids[0].write({'quantity': float(quantity_done)})
+            # Check if product requires lot/serial tracking
+            if move.product_id.tracking != 'none' and not lot_name and not lot_id:
+                return {'success': False, 'error': f'Lot/Serial number is required for product {move.product_id.name}'}
+
+            # Find or create lot if lot_name is provided
+            lot = None
+            if lot_id:
+                lot = request.env['stock.lot'].browse(int(lot_id))
+            elif lot_name and move.product_id.tracking != 'none':
+                # Search for existing lot
+                lot = request.env['stock.lot'].search([
+                    ('name', '=', lot_name),
+                    ('product_id', '=', move.product_id.id),
+                    ('company_id', 'in', [move.company_id.id, False])
+                ], limit=1)
+                
+                # Create new lot if not found
+                if not lot:
+                    lot = request.env['stock.lot'].create({
+                        'name': lot_name,
+                        'product_id': move.product_id.id,
+                        'company_id': move.company_id.id,
+                    })
+
+            # For serial tracking, quantity must be 1
+            if move.product_id.tracking == 'serial' and float(quantity_done) != 1.0:
+                return {'success': False, 'error': 'Quantity must be 1.0 for serial tracked products'}
+
+            # Prepare move line values
+            move_line_vals = {
+                'move_id': move.id,
+                'product_id': move.product_id.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,
+                'location_dest_id': move.location_dest_id.id,
+                'quantity': float(quantity_done),
+                'picking_id': picking_id,
+            }
+
+            if lot:
+                move_line_vals['lot_id'] = lot.id
+            elif lot_name:
+                move_line_vals['lot_name'] = lot_name
+
+            # Create or update move lines
+            if move.product_id.tracking == 'serial':
+                # For serial numbers, always create new move line
+                request.env['stock.move.line'].create(move_line_vals)
             else:
-                # Create a new move line if none exists
-                request.env['stock.move.line'].create({
-                    'move_id': move.id,
-                    'product_id': move.product_id.id,
-                    'product_uom_id': move.product_uom.id,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                    'quantity': float(quantity_done),
-                    'picking_id': picking_id,
-                })
+                # For lot tracking or no tracking, update existing or create new
+                existing_line = move.move_line_ids.filtered(
+                    lambda ml: ml.lot_id == lot if lot else not ml.lot_id
+                )
+                
+                if existing_line:
+                    existing_line[0].write({'quantity': float(quantity_done)})
+                else:
+                    request.env['stock.move.line'].create(move_line_vals)
 
             # Get updated quantity done
             updated_qty = sum(move.move_line_ids.mapped('quantity'))
+
+            # Get all move lines for response
+            move_lines_detail = []
+            for ml in move.move_line_ids:
+                move_lines_detail.append({
+                    'id': ml.id,
+                    'lot_id': ml.lot_id.id if ml.lot_id else False,
+                    'lot_name': ml.lot_id.name if ml.lot_id else ml.lot_name or '',
+                    'quantity': ml.quantity,
+                })
 
             return {
                 'success': True,
@@ -413,6 +480,111 @@ class MobileInventoryController(http.Controller):
                 'data': {
                     'move_id': move.id,
                     'quantity_done': updated_qty,
+                    'move_lines': move_lines_detail,
+                }
+            }
+        
+        return self._handle_request(handler)
+
+    @http.route('/api/mobile/receipts/<int:picking_id>/scan', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def scan_receipt_product(self, picking_id, **kwargs):
+        """
+        Scan product and lot/serial number for receipt
+        Expected params: barcode (product or lot), lot_name (if entering manually)
+        """
+        def handler(data):
+            barcode = data.get('barcode', '')
+            lot_name = data.get('lot_name', '')
+            
+            if not barcode and not lot_name:
+                return {'success': False, 'error': 'Barcode or lot name is required'}
+
+            picking = request.env['stock.picking'].browse(picking_id)
+            if not picking.exists():
+                return {'success': False, 'error': 'Receipt not found'}
+
+            # Try to find product by barcode
+            product = request.env['product.product'].search([
+                ('barcode', '=', barcode)
+            ], limit=1)
+
+            # If not product, check if it's a lot/serial number
+            lot = None
+            if not product and barcode:
+                lot = request.env['stock.lot'].search([
+                    ('name', '=', barcode)
+                ], limit=1)
+                if lot:
+                    product = lot.product_id
+            
+            # Use lot_name if provided
+            if lot_name and not lot:
+                lot_search = request.env['stock.lot'].search([
+                    ('name', '=', lot_name)
+                ], limit=1)
+                if lot_search:
+                    lot = lot_search
+                    if not product:
+                        product = lot.product_id
+
+            if not product:
+                return {'success': False, 'error': 'Product not found for barcode/lot'}
+
+            # Find matching move in the picking
+            move = picking.move_ids_without_package.filtered(
+                lambda m: m.product_id == product and m.state != 'done'
+            )
+
+            if not move:
+                return {'success': False, 'error': f'No pending receipt for product {product.name}'}
+
+            move = move[0]  # Take first matching move
+
+            # Determine lot name to use
+            lot_to_use = lot_name or (lot.name if lot else '')
+
+            # Check if product requires lot tracking
+            if move.product_id.tracking != 'none' and not lot_to_use:
+                return {
+                    'success': False,
+                    'error': 'Lot/Serial number required',
+                    'requires_lot': True,
+                    'product': {
+                        'id': product.id,
+                        'name': product.name,
+                        'tracking': product.tracking,
+                    },
+                    'move_id': move.id,
+                }
+
+            # For serial numbers, quantity is always 1
+            quantity = 1.0 if move.product_id.tracking == 'serial' else 1.0
+
+            # Call the update method
+            update_data = {
+                'move_id': move.id,
+                'quantity_done': quantity,
+                'lot_name': lot_to_use,
+            }
+            
+            if lot:
+                update_data['lot_id'] = lot.id
+
+            result = self.update_receipt_line(picking_id, **{'data': update_data})
+            
+            return {
+                'success': True,
+                'message': 'Product scanned successfully',
+                'data': {
+                    'product': {
+                        'id': product.id,
+                        'name': product.name,
+                        'code': product.default_code or '',
+                        'tracking': product.tracking,
+                    },
+                    'lot_name': lot_to_use,
+                    'quantity': quantity,
+                    'move_id': move.id,
                 }
             }
         
