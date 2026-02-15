@@ -57,12 +57,17 @@
                     <!-- Step 2: Input Lot/Serial -->
                     <group invisible="state != 'input_lot'">
                         <group string="Finished Product Lot/Serial Number">
+                            <label for="lot_name" string="Lot/Serial Number"/>
+                            <div class="o_row">
+                                <field name="lot_name" 
+                                       placeholder="Enter new lot/serial number"
+                                       class="oe_inline"
+                                       required="product_tracking in ['lot', 'serial']"/>
+                            </div>
                             <field name="lot_producing_id" 
+                                   string="Or Select Existing"
                                    domain="[('product_id', '=', product_id)]"
-                                   required="product_tracking in ['lot', 'serial']"/>
-                            <field name="lot_name" 
-                                   placeholder="Or enter new lot/serial number"
-                                   invisible="lot_producing_id != False"/>
+                                   placeholder="Select existing lot/serial"/>
                         </group>
                     </group>
                     
