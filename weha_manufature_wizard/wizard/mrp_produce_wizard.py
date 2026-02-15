@@ -158,60 +158,20 @@ class MrpProduceWizard(models.TransientModel):
                     raise ValidationError(_('Serial tracked component %s must have quantity 1.') % component.product_id.name)
 
     def action_produce(self):
-        """Process the production"""
+        """Process the production - update one lot/serial at a time"""
         self.ensure_one()
         self._validate_lot()
         self._validate_components()
         
         production = self.production_id
         
-        # Process component consumption
-        for component in self.component_line_ids:
-            if component.qty_done > 0:
-                move = component.move_id
-                
-                # Create or get lot for component
-                component_lot_id = False
-                if component.product_id.tracking in ['lot', 'serial']:
-                    if component.lot_id:
-                        component_lot_id = component.lot_id.id
-                    elif component.lot_name:
-                        component_lot_id = self.env['stock.lot'].create({
-                            'name': component.lot_name,
-                            'product_id': component.product_id.id,
-                            'company_id': production.company_id.id,
-                        }).id
-                
-                # Find or create move line for component
-                existing_line = move.move_line_ids.filtered(
-                    lambda ml: not ml.lot_id and ml.quantity == 0
-                )[:1]
-                
-                if existing_line:
-                    # Update existing move line
-                    existing_line.write({
-                        'quantity': component.qty_done,
-                        'lot_id': component_lot_id,
-                    })
-                else:
-                    # Create new move line if none exists
-                    self.env['stock.move.line'].create({
-                        'move_id': move.id,
-                        'product_id': component.product_id.id,
-                        'product_uom_id': component.product_uom_id.id,
-                        'quantity': component.qty_done,
-                        'lot_id': component_lot_id,
-                        'location_id': move.location_id.id,
-                        'location_dest_id': move.location_dest_id.id,
-                    })
-        
-        # Process finished product with lot/serial
+        # Process finished product - update only one move line
         finished_move = production.move_finished_ids.filtered(
             lambda m: m.product_id == self.product_id and m.state not in ['done', 'cancel']
         )[:1]
         
         if finished_move:
-            # Create or get lot for finished product
+            # Get or create lot for finished product
             lot_id = False
             if self.product_tracking in ['lot', 'serial']:
                 if self.lot_producing_id:
@@ -223,28 +183,40 @@ class MrpProduceWizard(models.TransientModel):
                         'company_id': production.company_id.id,
                     }).id
             
-            # Find existing move line without lot/serial
-            existing_line = finished_move.move_line_ids.filtered(
-                lambda ml: not ml.lot_id and ml.quantity == 0
-            )[:1]
+            # Find first move line without lot/serial and update only that one
+            move_line = finished_move.move_line_ids.filtered(lambda ml: not ml.lot_id)[:1]
             
-            if existing_line:
-                # Update existing move line with lot/serial
-                existing_line.write({
+            if move_line:
+                move_line.write({
                     'quantity': self.qty_producing,
                     'lot_id': lot_id,
                 })
-            else:
-                # Create new move line
-                self.env['stock.move.line'].create({
-                    'move_id': finished_move.id,
-                    'product_id': self.product_id.id,
-                    'product_uom_id': self.product_uom_id.id,
-                    'quantity': self.qty_producing,
-                    'lot_id': lot_id,
-                    'location_id': finished_move.location_id.id,
-                    'location_dest_id': finished_move.location_dest_id.id,
-                })
+        
+        # Process component consumption - update only one move line per component
+        for component in self.component_line_ids:
+            if component.qty_done > 0:
+                move = component.move_id
+                
+                # Get or create lot for component
+                component_lot_id = False
+                if component.product_id.tracking in ['lot', 'serial']:
+                    if component.lot_id:
+                        component_lot_id = component.lot_id.id
+                    elif component.lot_name:
+                        component_lot_id = self.env['stock.lot'].create({
+                            'name': component.lot_name,
+                            'product_id': component.product_id.id,
+                            'company_id': production.company_id.id,
+                        }).id
+                
+                # Find first move line without lot/serial and update only that one
+                move_line = move.move_line_ids.filtered(lambda ml: not ml.lot_id)[:1]
+                
+                if move_line:
+                    move_line.write({
+                        'quantity': component.qty_done,
+                        'lot_id': component_lot_id,
+                    })
         
         # Update production quantity done
         production._set_qty_producing()
