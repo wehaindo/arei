@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="weha_pos_rfid.RFIDButton">
+        <div t-att-class="'control-button ' + buttonClass" t-on-click="onClick">
+            <i t-att-class="'fa ' + buttonIcon" />
+            <span class="control-button-label">
+                <t t-esc="buttonText"/>
+            </span>
+        </div>
+    </t>
+</templates>
