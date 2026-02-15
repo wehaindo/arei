@@ -1,6 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     
+    <!-- Component Tree View -->
+    <record id="view_mrp_produce_wizard_component_tree" model="ir.ui.view">
+        <field name="name">mrp.produce.wizard.component.tree</field>
+        <field name="model">mrp.produce.wizard.component</field>
+        <field name="arch" type="xml">
+            <tree editable="bottom">
+                <field name="product_id" readonly="1"/>
+                <field name="product_tracking" column_invisible="1"/>
+                <field name="qty_to_consume" readonly="1"/>
+                <field name="qty_done"/>
+                <field name="product_uom_id" readonly="1"/>
+                <field name="lot_id" 
+                       domain="[('product_id', '=', product_id)]"
+                       optional="show"/>
+                <field name="lot_name" 
+                       placeholder="Or enter lot/serial"
+                       optional="show"/>
+            </tree>
+        </field>
+    </record>
+    
     <!-- Manufacturing Produce Wizard Form View -->
     <record id="view_mrp_produce_wizard_form" model="ir.ui.view">
         <field name="name">mrp.produce.wizard.form</field>
@@ -48,21 +69,7 @@
                     <!-- Step 3: Input Components -->
                     <group invisible="state != 'input_components'">
                         <group string="Components to Consume">
-                            <field name="component_line_ids" nolabel="1">
-                                <tree editable="bottom">
-                                    <field name="product_id" readonly="1"/>
-                                    <field name="product_tracking" column_invisible="1"/>
-                                    <field name="qty_to_consume" readonly="1"/>
-                                    <field name="qty_done"/>
-                                    <field name="product_uom_id" readonly="1"/>
-                                    <field name="lot_id" 
-                                           domain="[('product_id', '=', product_id)]"
-                                           optional="show"/>
-                                    <field name="lot_name" 
-                                           placeholder="Or enter lot/serial"
-                                           optional="show"/>
-                                </tree>
-                            </field>
+                            <field name="component_line_ids" nolabel="1"/>
                         </group>
                     </group>
                     
