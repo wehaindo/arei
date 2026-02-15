@@ -134,7 +134,7 @@ export const rfidService = {
                 console.log("✅ POS Product found:", posProduct);
 
                 // Add product to current order
-                if (config.rfid_auto_add) {
+                if (pos.config.rfid_auto_add) {
                     const currentOrder = pos.get_order();
                     if (currentOrder) {
                         console.log("➕ Adding product to order:", posProduct.display_name);
