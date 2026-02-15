@@ -57,12 +57,10 @@
                                     <field name="product_uom_id" readonly="1"/>
                                     <field name="lot_id" 
                                            domain="[('product_id', '=', product_id)]"
-                                           attrs="{'column_invisible': [('parent.product_tracking', 'not in', ['lot', 'serial'])],
-                                                   'required': [('product_tracking', 'in', ['lot', 'serial']), ('qty_done', '>', 0)]}"/>
+                                           attrs="{'required': [('product_tracking', 'in', ['lot', 'serial']), ('qty_done', '>', 0)]}"/>
                                     <field name="lot_name" 
                                            placeholder="Or enter lot/serial"
-                                           attrs="{'column_invisible': [('parent.product_tracking', 'not in', ['lot', 'serial'])],
-                                                   'invisible': [('lot_id', '!=', False)]}"/>
+                                           attrs="{'invisible': [('lot_id', '!=', False)]}"/>
                                 </tree>
                             </field>
                         </page>
