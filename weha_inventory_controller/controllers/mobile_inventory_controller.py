@@ -762,7 +762,7 @@ class MobileInventoryController(http.Controller):
                             continue
 
                         # Create a new move line with existing lot
-                        request.env['stock.move.line'].create({
+                        request.env['stock.move.line'].sudo().create({
                             'move_id': move.id,
                             'product_id': product.id,
                             'product_uom_id': move.product_uom.id,
@@ -771,6 +771,7 @@ class MobileInventoryController(http.Controller):
                             'quantity': 1.0,
                             'picking_id': picking_id,
                             'lot_id': lot.id,
+                            'lot_name': lot.name,
                         })
 
                         results.append({
@@ -779,6 +780,7 @@ class MobileInventoryController(http.Controller):
                             'product_name': product.name,
                             'product_id': product.id,
                             'lot_id': lot.id,
+                            'lot_name': lot.name,
                             'message': 'Tag confirmed',
                             'mode': 'validate'
                         })
@@ -814,15 +816,28 @@ class MobileInventoryController(http.Controller):
                         move = tracked_moves[0]
                         product = move.product_id
                         
-                        # Create new lot/serial number
-                        new_lot = request.env['stock.lot'].create({
+                        # Create new lot/serial number with sudo for permissions
+                        new_lot = request.env['stock.lot'].sudo().create({
                             'name': epc,
                             'product_id': product.id,
                             'company_id': picking.company_id.id,
                         })
                         
+                        # Ensure lot is committed
+                        request.env.cr.commit()
+                        
+                        if not new_lot:
+                            results.append({
+                                'epc': epc,
+                                'success': False,
+                                'error': 'Failed to create lot/serial number',
+                                'mode': 'new'
+                            })
+                            error_count += 1
+                            continue
+                        
                         # Create move line with new lot (1 qty per RFID tag)
-                        request.env['stock.move.line'].create({
+                        move_line = request.env['stock.move.line'].sudo().create({
                             'move_id': move.id,
                             'product_id': product.id,
                             'product_uom_id': move.product_uom.id,
@@ -831,6 +846,7 @@ class MobileInventoryController(http.Controller):
                             'quantity': 1.0,
                             'picking_id': picking_id,
                             'lot_id': new_lot.id,
+                            'lot_name': new_lot.name,
                         })
                         
                         results.append({
@@ -839,6 +855,7 @@ class MobileInventoryController(http.Controller):
                             'product_name': product.name,
                             'product_id': product.id,
                             'lot_id': new_lot.id,
+                            'lot_name': new_lot.name,
                             'message': f'New tag added for {product.name}',
                             'mode': 'new'
                         })
