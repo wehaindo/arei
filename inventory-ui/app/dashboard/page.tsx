@@ -150,7 +150,7 @@ export default function DashboardPage() {
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <Calendar className="w-5 h-5" />
-            Today's Operations
+            Today&apos;s Operations
           </h3>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>

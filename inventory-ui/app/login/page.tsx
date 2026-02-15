@@ -27,16 +27,27 @@ export default function LoginPage() {
     password: "",
   });
 
-  // Load saved configuration on mount
+  // Check if already authenticated and redirect to dashboard
   useEffect(() => {
     if (typeof window !== "undefined") {
+      // Check if user is already logged in
+      if (odooApi.isAuthenticated()) {
+        const user = odooApi.getUser();
+        if (user) {
+          console.log('User already authenticated, redirecting to dashboard');
+          router.push("/dashboard");
+          return;
+        }
+      }
+      
+      // Load saved configuration
       setFormData(prev => ({
         ...prev,
         serverUrl: localStorage.getItem("odoo_server_url") || "http://localhost:8069",
         db: localStorage.getItem("odoo_database") || "",
       }));
     }
-  }, []);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

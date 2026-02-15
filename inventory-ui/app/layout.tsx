@@ -17,7 +17,8 @@ export default function RootLayout({
   const pathname = usePathname();
   // Hide bottom nav on login and detail pages
   const showBottomNav = pathname !== "/login" && 
-                        pathname !== "/pickings/detail";
+                        !pathname.includes("/detail") &&
+                        !pathname.match(/\/(receipts|deliveries|transfers)\/\d+/);
 
   return (
     <html lang="en">
