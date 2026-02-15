@@ -216,12 +216,26 @@ class MrpProduceWizard(models.TransientModel):
                         'lot_id': component_lot_id,
                     })
         
+        # Check if all move lines have lot/serial numbers assigned
+        all_finished = True
+        if finished_move:
+            remaining_lines = finished_move.move_line_ids.filtered(lambda ml: not ml.lot_id)
+            if remaining_lines:
+                all_finished = False
+        
+        if all_finished:
+            # All move lines have lot/serial - finish the production
+            production.button_mark_done()
+            message = _('Production completed successfully!')
+        else:
+            message = _('Lot/Serial number updated. Continue to process remaining units.')
+        
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Success'),
-                'message': _('Lot/Serial number updated. Continue to process remaining units.'),
+                'message': message,
                 'type': 'success',
                 'sticky': False,
             }
