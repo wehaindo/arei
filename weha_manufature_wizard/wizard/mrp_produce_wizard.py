@@ -130,7 +130,7 @@ class MrpProduceWizard(models.TransientModel):
                 if self.product_tracking == 'serial' and self.lot_producing_id.product_qty > 0:
                     raise ValidationError(_('Serial number %s is already used.') % self.lot_producing_id.name)
             elif self.lot_name:
-                # Create new lot
+                # Check if lot name already exists
                 existing_lot = self.env['stock.lot'].search([
                     ('name', '=', self.lot_name),
                     ('product_id', '=', self.product_id.id),
@@ -141,11 +141,12 @@ class MrpProduceWizard(models.TransientModel):
                     if self.product_tracking == 'serial' and existing_lot.product_qty > 0:
                         raise ValidationError(_('Serial number %s is already used.') % self.lot_name)
                     self.lot_producing_id = existing_lot
-                else:
-                    # Will be created during production
-                    pass
             else:
-                raise ValidationError(_('Please enter a lot/serial number.'))
+                # Auto-generate if enabled
+                if self.product_id.auto_create_lot:
+                    self.lot_name = self.env['ir.sequence'].next_by_code('stock.lot.serial')
+                else:
+                    raise ValidationError(_('Please enter a lot/serial number.'))
 
     def _validate_components(self):
         """Validate component consumption"""
