@@ -110,10 +110,23 @@ public class RfidSwingWebSocketApp extends JFrame {
                         String tid = tag.getTid();
                         String rssi = tag.getRssi();
                         
-                        // Clean up the tag ID by removing trailing zeros
+                        // Clean up the tag ID
                         String tagId = null;
                         if (epc != null && !epc.isEmpty()) {
-                            tagId = epc.replaceAll("0+$", ""); // Remove trailing zeros
+                            // Standard EPC is 24 hex characters (96 bits)
+                            // Find the actual EPC length by looking for non-zero content
+                            int lastNonZero = epc.length() - 1;
+                            while (lastNonZero > 0 && epc.charAt(lastNonZero) == '0') {
+                                lastNonZero--;
+                            }
+                            
+                            // Keep at least to the next even position for complete byte
+                            if (lastNonZero % 2 == 0) {
+                                lastNonZero++; // Include the next character to complete the byte
+                            }
+                            
+                            tagId = epc.substring(0, lastNonZero + 1);
+                            
                             if (tagId.isEmpty() || tagId.length() < 4) {
                                 tagId = null; // EPC was all zeros or too short
                             } else {

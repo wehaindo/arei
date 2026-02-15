@@ -120,8 +120,8 @@ export const rfidService = {
 
                 console.log("📦 Product from lot:", product);
 
-                // Get product details from POS
-                const posProduct = pos.db.get_product_by_id(product[0]);
+                // Get product details from POS (Odoo 18 uses models.Product)
+                const posProduct = pos.models["product.product"].get(product[0]);
                 
                 if (!posProduct) {
                     console.warn("⚠️ Product not available in POS:", product[1]);
@@ -138,9 +138,8 @@ export const rfidService = {
                     const currentOrder = pos.get_order();
                     if (currentOrder) {
                         console.log("➕ Adding product to order:", posProduct.display_name);
-                        currentOrder.add_product(posProduct, {
+                        await currentOrder.add_product(posProduct, {
                             quantity: 1,
-                            merge: false, // Don't merge with existing lines for tracked products
                         });
                         
                         env.services.notification.add(`Added: ${posProduct.display_name}`, {
