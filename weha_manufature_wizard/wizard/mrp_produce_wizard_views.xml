@@ -23,7 +23,7 @@
                     </group>
                     
                     <!-- Step 1: Input Quantity -->
-                    <group attrs="{'invisible': [('state', '!=', 'input_quantity')]}">
+                    <group invisible="state != 'input_quantity'">
                         <group>
                             <label for="qty_producing"/>
                             <div class="o_row">
@@ -34,19 +34,19 @@
                     </group>
                     
                     <!-- Step 2: Input Lot/Serial -->
-                    <group attrs="{'invisible': [('state', '!=', 'input_lot')]}">
+                    <group invisible="state != 'input_lot'">
                         <group string="Finished Product Lot/Serial Number">
                             <field name="lot_producing_id" 
                                    domain="[('product_id', '=', product_id)]"
-                                   attrs="{'required': [('product_tracking', 'in', ['lot', 'serial'])]}"/>
+                                   required="product_tracking in ['lot', 'serial']"/>
                             <field name="lot_name" 
                                    placeholder="Or enter new lot/serial number"
-                                   attrs="{'invisible': [('lot_producing_id', '!=', False)]}"/>
+                                   invisible="lot_producing_id != False"/>
                         </group>
                     </group>
                     
                     <!-- Step 3: Input Components -->
-                    <group attrs="{'invisible': [('state', '!=', 'input_components')]}">
+                    <group invisible="state != 'input_components'">
                         <group string="Components to Consume">
                             <field name="component_line_ids" nolabel="1">
                                 <tree editable="bottom">
@@ -67,7 +67,7 @@
                     </group>
                     
                     <!-- Step 4: Confirm -->
-                    <group attrs="{'invisible': [('state', '!=', 'confirm')]}">
+                    <group invisible="state != 'confirm'">
                         <group string="Summary">
                             <label for="qty_producing"/>
                             <div>
@@ -75,9 +75,11 @@
                                 <field name="product_uom_id" readonly="1" class="oe_inline"/>
                             </div>
                             <field name="lot_producing_id" readonly="1" 
-                                   attrs="{'invisible': [('product_tracking', 'not in', ['lot', 'serial'])]}"/>
+                                   invisible="product_tracking not in ['lot', 'serial']"/>
                             <field name="lot_name" readonly="1"
-                                   attrs="{'invisible': ['|', ('product_tracking', 'not in', ['lot', 'serial']), ('lot_producing_id', '!=', False)]}"/>
+                                   invisible="product_tracking not in ['lot', 'serial'] or lot_producing_id != False"/>
+                        </group>
+                    </group>
                         </group>
                     </group>
                     
@@ -87,17 +89,17 @@
                             name="action_back" 
                             type="object" 
                             class="btn-secondary"
-                            attrs="{'invisible': [('state', '=', 'input_quantity')]}"/>
+                            invisible="state == 'input_quantity'"/>
                     <button string="Next" 
                             name="action_next" 
                             type="object" 
                             class="btn-primary"
-                            attrs="{'invisible': [('state', '=', 'confirm')]}"/>
+                            invisible="state == 'confirm'"/>
                     <button string="Produce" 
                             name="action_produce" 
                             type="object" 
                             class="btn-primary"
-                            attrs="{'invisible': [('state', '!=', 'confirm')]}"/>
+                            invisible="state != 'confirm'"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
