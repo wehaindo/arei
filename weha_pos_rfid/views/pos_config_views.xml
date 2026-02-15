@@ -5,28 +5,27 @@
         <field name="model">pos.config</field>
         <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//div[@name='inventory']" position="after">
-                <div class="col-12 col-lg-6 o_setting_box" id="rfid_settings">
-                    <div class="o_setting_left_pane">
-                        <field name="rfid_enabled"/>
+            <xpath expr="//page[@name='products']" position="after">
+                <page string="RFID Settings" name="rfid_settings">
+                    <group>
+                        <group>
+                            <field name="rfid_enabled"/>
+                            <field name="rfid_websocket_url" invisible="not rfid_enabled"/>
+                        </group>
+                        <group>
+                            <field name="rfid_auto_add" invisible="not rfid_enabled"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="alert" invisible="not rfid_enabled">
+                        <strong>RFID Integration</strong>
+                        <ul>
+                            <li>Ensure the RFID Desktop Application is running</li>
+                            <li>Default WebSocket URL: ws://localhost:8081</li>
+                            <li>Products will be added automatically when RFID tags are scanned</li>
+                            <li>Tags must match lot/serial numbers in the system</li>
+                        </ul>
                     </div>
-                    <div class="o_setting_right_pane">
-                        <label for="rfid_enabled"/>
-                        <div class="text-muted">
-                            Enable RFID reader integration to scan products by lot/serial number
-                        </div>
-                        <div class="content-group mt16" invisible="not rfid_enabled">
-                            <div class="row">
-                                <label for="rfid_websocket_url" class="col-lg-4 o_light_label" string="WebSocket URL"/>
-                                <field name="rfid_websocket_url"/>
-                            </div>
-                            <div class="row mt8">
-                                <label for="rfid_auto_add" class="col-lg-4 o_light_label"/>
-                                <field name="rfid_auto_add"/>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                </page>
             </xpath>
         </field>
     </record>
