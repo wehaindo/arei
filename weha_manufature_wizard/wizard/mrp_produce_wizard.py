@@ -224,9 +224,18 @@ class MrpProduceWizard(models.TransientModel):
                 all_finished = False
         
         if all_finished:
-            # All move lines have lot/serial - finish the production
-            production.button_mark_done()
-            message = _('Production completed successfully!')
+            # All move lines have lot/serial - validate and finish the production
+            try:
+                # Set quantities on all move lines if needed
+                for ml in finished_move.move_line_ids:
+                    if not ml.quantity or ml.quantity == 0:
+                        ml.quantity = 1
+                
+                # Mark production as done
+                production.with_context(skip_backorder=True).button_mark_done()
+                message = _('Production completed successfully!')
+            except Exception as e:
+                message = _('Lot/Serial number updated. Manual completion required: %s') % str(e)
         else:
             message = _('Lot/Serial number updated. Continue to process remaining units.')
         
