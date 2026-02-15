@@ -404,7 +404,9 @@ function PickingDetailContent() {
               return {
                 ...tag,
                 status: result.success ? 'success' : 'error',
-                error: result.error
+                error: result.error,
+                message: result.message,
+                mode: result.mode // 'validate' or 'new'
               };
             }
             return { ...tag, status: 'error', error: 'No response' };
@@ -412,10 +414,12 @@ function PickingDetailContent() {
 
           const successCount = results.filter((r: any) => r.success).length;
           const errorCount = results.filter((r: any) => !r.success).length;
+          const newTagCount = results.filter((r: any) => r.success && r.mode === 'new').length;
+          const validatedCount = results.filter((r: any) => r.success && r.mode === 'validate').length;
         
         toast({
           title: "Processing Complete",
-          description: `${successCount} success, ${errorCount} failed`,
+          description: `${validatedCount} validated, ${newTagCount} new tags added, ${errorCount} failed`,
           variant: errorCount > 0 ? "destructive" : "default"
         });
         
@@ -708,12 +712,20 @@ function PickingDetailContent() {
                                 <X className="w-5 h-5 text-red-600" />
                               )}
                               <p className={`font-mono text-base font-semibold ${textColor}`}>{tag.epc}</p>
+                              {(tag as any).mode === 'new' && (
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold">NEW</span>
+                              )}
+                              {(tag as any).mode === 'validate' && (
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">VALID</span>
+                              )}
                             </div>
                             <p className="text-xs text-gray-500 ml-7 mt-1">
                               RSSI: {tag.rssi} | Reads: {tag.count}
                             </p>
                             {tag.status === 'success' && (
-                              <p className="text-sm text-green-600 font-medium mt-1 ml-7">✓ Found and ready to process</p>
+                              <p className="text-sm text-green-600 font-medium mt-1 ml-7">
+                                ✓ {(tag as any).message || 'Ready to process'}
+                              </p>
                             )}
                             {tag.status === 'error' && (
                               <p className="text-sm text-red-600 font-medium mt-1 ml-7">✗ {tag.error || 'Lot/Serial not found in this operation'}</p>

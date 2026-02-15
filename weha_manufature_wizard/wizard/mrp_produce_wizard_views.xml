@@ -58,18 +58,37 @@
                     <!-- Step 2: Input Lot/Serial -->
                     <group invisible="state != 'input_lot'">
                         <group string="Finished Product Lot/Serial Number">
-                            <label for="lot_name" string="Enter New Lot/Serial"/>
-                            <div class="o_row">
+                            <field name="serial_input_method" 
+                                   widget="radio"
+                                   invisible="product_tracking != 'serial'"/>
+                            
+                            <!-- Single Serial Input -->
+                            <label for="lot_name" 
+                                   string="Enter New Lot/Serial"
+                                   invisible="serial_input_method == 'bulk' or serial_input_method == 'auto'"/>
+                            <div class="o_row" invisible="serial_input_method == 'bulk' or serial_input_method == 'auto'">
                                 <field name="lot_name" 
                                        placeholder="Type new lot/serial number"
                                        class="oe_inline"/>
                             </div>
-                            <label for="lot_producing_id" string="Or Select Existing"/>
-                            <div class="o_row">
+                            <label for="lot_producing_id" 
+                                   string="Or Select Existing"
+                                   invisible="serial_input_method == 'bulk' or serial_input_method == 'auto'"/>
+                            <div class="o_row" invisible="serial_input_method == 'bulk' or serial_input_method == 'auto'">
                                 <field name="lot_producing_id" 
                                        domain="[('product_id', '=', product_id)]"
                                        placeholder="Choose from existing"
                                        class="oe_inline"/>
+                            </div>
+                            
+                            <!-- Bulk Serial Input -->
+                            <field name="bulk_serial_numbers" 
+                                   placeholder="Enter serial numbers, one per line:&#10;SN001&#10;SN002&#10;SN003"
+                                   invisible="serial_input_method != 'bulk'"/>
+                            
+                            <!-- Auto Generate Info -->
+                            <div invisible="serial_input_method != 'auto'">
+                                <p>Serial numbers will be auto-generated using the sequence.</p>
                             </div>
                         </group>
                     </group>

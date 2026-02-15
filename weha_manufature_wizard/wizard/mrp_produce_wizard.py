@@ -46,6 +46,14 @@ class MrpProduceWizard(models.TransientModel):
     lot_producing_id = fields.Many2one('stock.lot', string='Lot/Serial Number')
     lot_name = fields.Char('Lot/Serial Number Name')
     
+    # Serial number input method
+    serial_input_method = fields.Selection([
+        ('single', 'Input One by One'),
+        ('bulk', 'Provide All Serial Numbers'),
+        ('auto', 'Auto Generate Serial Numbers')
+    ], string='Serial Input Method', default='single')
+    bulk_serial_numbers = fields.Text('Serial Numbers', help='Enter serial numbers, one per line')
+    
     # Component lines
     component_line_ids = fields.One2many('mrp.produce.wizard.component', 'wizard_id', string='Components')
     
@@ -86,7 +94,11 @@ class MrpProduceWizard(models.TransientModel):
             else:
                 self.state = 'input_components'
         elif self.state == 'input_lot':
-            self._validate_lot()
+            # For bulk method, validate all serial numbers
+            if self.serial_input_method == 'bulk':
+                self._validate_bulk_serials()
+            else:
+                self._validate_lot()
             self.state = 'input_components'
         elif self.state == 'input_components':
             self._validate_components()
@@ -119,6 +131,42 @@ class MrpProduceWizard(models.TransientModel):
             'target': 'new',
         }
 
+    def _validate_bulk_serials(self):
+        """Validate bulk serial number input"""
+        if not self.bulk_serial_numbers:
+            raise ValidationError(_('Please enter serial numbers.'))
+        
+        # Split by newlines and remove empty lines
+        serial_numbers = [s.strip() for s in self.bulk_serial_numbers.split('\n') if s.strip()]
+        
+        if not serial_numbers:
+            raise ValidationError(_('Please enter serial numbers.'))
+        
+        # Get count of pending move lines
+        finished_move = self.production_id.move_finished_ids.filtered(
+            lambda m: m.product_id == self.product_id and m.state not in ['done', 'cancel']
+        )[:1]
+        
+        if finished_move:
+            pending_lines = finished_move.move_line_ids.filtered(lambda ml: not ml.lot_id)
+            required_count = len(pending_lines)
+            
+            if len(serial_numbers) > required_count:
+                raise ValidationError(_('You entered %s serial numbers but only %s units remain.') % (len(serial_numbers), required_count))
+        
+        # Check for duplicates in input
+        if len(serial_numbers) != len(set(serial_numbers)):
+            raise ValidationError(_('Duplicate serial numbers found in your input.'))
+        
+        # Check if serial numbers already exist
+        for serial in serial_numbers:
+            existing = self.env['stock.lot'].search([
+                ('name', '=', serial),
+                ('product_id', '=', self.product_id.id),
+            ], limit=1)
+            if existing and existing.product_qty > 0:
+                raise ValidationError(_('Serial number %s is already used.') % serial)
+    
     def _validate_lot(self):
         """Validate lot/serial number input"""
         if self.product_tracking == 'serial' and self.qty_producing != 1:
@@ -159,38 +207,70 @@ class MrpProduceWizard(models.TransientModel):
                     raise ValidationError(_('Serial tracked component %s must have quantity 1.') % component.product_id.name)
 
     def action_produce(self):
-        """Process the production - update one lot/serial at a time"""
+        """Process the production - update one lot/serial at a time or bulk"""
         self.ensure_one()
-        self._validate_lot()
+        
+        # Validate based on method
+        if self.serial_input_method == 'bulk':
+            self._validate_bulk_serials()
+        else:
+            self._validate_lot()
+        
         self._validate_components()
         
         production = self.production_id
         
-        # Process finished product - update only one move line
+        # Process finished product
         finished_move = production.move_finished_ids.filtered(
             lambda m: m.product_id == self.product_id and m.state not in ['done', 'cancel']
         )[:1]
         
         if finished_move:
-            # Get or create lot for finished product
-            lot_id = False
-            if self.product_tracking in ['lot', 'serial']:
-                if self.lot_producing_id:
-                    lot_id = self.lot_producing_id.id
-                elif self.lot_name:
-                    lot_id = self.env['stock.lot'].create({
-                        'name': self.lot_name,
-                        'product_id': self.product_id.id,
-                        'company_id': production.company_id.id,
-                    }).id
-            
-            # Find first move line without lot/serial and update only that one
-            move_line = finished_move.move_line_ids.filtered(lambda ml: not ml.lot_id)[:1]
-            
-            if move_line:
-                move_line.write({
-                    'lot_id': lot_id,
-                })
+            if self.serial_input_method == 'bulk':
+                # Process all serial numbers at once
+                serial_numbers = [s.strip() for s in self.bulk_serial_numbers.split('\n') if s.strip()]
+                pending_lines = finished_move.move_line_ids.filtered(lambda ml: not ml.lot_id)
+                
+                for idx, serial in enumerate(serial_numbers):
+                    if idx < len(pending_lines):
+                        lot_id = self.env['stock.lot'].create({
+                            'name': serial,
+                            'product_id': self.product_id.id,
+                            'company_id': production.company_id.id,
+                        }).id
+                        pending_lines[idx].write({'lot_id': lot_id})
+            elif self.serial_input_method == 'auto':
+                # Auto-generate serial number
+                serial = self.env['ir.sequence'].next_by_code('stock.lot.serial')
+                lot_id = self.env['stock.lot'].create({
+                    'name': serial,
+                    'product_id': self.product_id.id,
+                    'company_id': production.company_id.id,
+                }).id
+                
+                move_line = finished_move.move_line_ids.filtered(lambda ml: not ml.lot_id)[:1]
+                if move_line:
+                    move_line.write({'lot_id': lot_id})
+            else:
+                # Single serial input (one by one)
+                lot_id = False
+                if self.product_tracking in ['lot', 'serial']:
+                    if self.lot_producing_id:
+                        lot_id = self.lot_producing_id.id
+                    elif self.lot_name:
+                        lot_id = self.env['stock.lot'].create({
+                            'name': self.lot_name,
+                            'product_id': self.product_id.id,
+                            'company_id': production.company_id.id,
+                        }).id
+                
+                # Find first move line without lot/serial and update only that one
+                move_line = finished_move.move_line_ids.filtered(lambda ml: not ml.lot_id)[:1]
+                
+                if move_line:
+                    move_line.write({
+                        'lot_id': lot_id,
+                    })
         
         # Process component consumption - update only one move line per component
         for component in self.component_line_ids:

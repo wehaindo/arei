@@ -686,7 +686,10 @@ class MobileInventoryController(http.Controller):
         """
         Process multiple RFID tags (lot numbers) for a picking
         Expected params: rfid_tags (array of EPC strings)
-        Each RFID tag EPC is a lot number, and each lot refers to one product
+        
+        Two modes:
+        1. If lot exists in DB → validate and confirm (check if in picking)
+        2. If lot is new → create lot and add new stock move line
         """
         def handler(data):
             rfid_tags = data.get('rfid_tags', [])
@@ -707,77 +710,153 @@ class MobileInventoryController(http.Controller):
                     # Search for lot by EPC (lot name = EPC)
                     lot = request.env['stock.lot'].search([('name', '=', epc)], limit=1)
                     
-                    if not lot:
+                    if lot:
+                        # MODE 1: Lot exists - validate and confirm
+                        product = lot.product_id
+                        if not product:
+                            results.append({
+                                'epc': epc,
+                                'success': False,
+                                'error': 'Lot has no product associated',
+                                'mode': 'validate'
+                            })
+                            error_count += 1
+                            continue
+
+                        # Find the move for this product in the picking
+                        move = picking.move_ids_without_package.filtered(
+                            lambda m: m.product_id.id == product.id
+                        )
+                        
+                        if not move:
+                            results.append({
+                                'epc': epc,
+                                'success': False,
+                                'error': f'Product "{product.name}" not found in this picking',
+                                'mode': 'validate'
+                            })
+                            error_count += 1
+                            continue
+
+                        move = move[0]  # Take first match
+
+                        # Check if this lot already has a move line in this picking
+                        existing_line = request.env['stock.move.line'].search([
+                            ('move_id', '=', move.id),
+                            ('lot_id', '=', lot.id),
+                            ('picking_id', '=', picking_id)
+                        ], limit=1)
+
+                        if existing_line:
+                            # Already confirmed - mark as validated
+                            results.append({
+                                'epc': epc,
+                                'success': True,
+                                'product_name': product.name,
+                                'product_id': product.id,
+                                'lot_id': lot.id,
+                                'message': 'Tag validated - already confirmed',
+                                'mode': 'validate'
+                            })
+                            success_count += 1
+                            continue
+
+                        # Create a new move line with existing lot
+                        request.env['stock.move.line'].create({
+                            'move_id': move.id,
+                            'product_id': product.id,
+                            'product_uom_id': move.product_uom.id,
+                            'location_id': move.location_id.id,
+                            'location_dest_id': move.location_dest_id.id,
+                            'quantity': 1.0,
+                            'picking_id': picking_id,
+                            'lot_id': lot.id,
+                        })
+
                         results.append({
                             'epc': epc,
-                            'success': False,
-                            'error': 'Lot not found'
+                            'success': True,
+                            'product_name': product.name,
+                            'product_id': product.id,
+                            'lot_id': lot.id,
+                            'message': 'Tag confirmed',
+                            'mode': 'validate'
                         })
-                        error_count += 1
-                        continue
-
-                    product = lot.product_id
-                    if not product:
-                        results.append({
-                            'epc': epc,
-                            'success': False,
-                            'error': 'Lot has no product associated'
-                        })
-                        error_count += 1
-                        continue
-
-                    # Find the move for this product in the picking
-                    move = picking.move_ids_without_package.filtered(
-                        lambda m: m.product_id.id == product.id
-                    )
+                        success_count += 1
                     
-                    if not move:
+                    else:
+                        # MODE 2: New lot - need to determine product and create lot + move line
+                        # For manufacturing receipts, find a product with serial tracking that needs receiving
+                        
+                        # Find moves with serial tracking products that have remaining quantity
+                        serial_moves = picking.move_ids_without_package.filtered(
+                            lambda m: m.product_id.tracking == 'serial' and 
+                            sum(m.move_line_ids.mapped('quantity')) < m.product_uom_qty
+                        )
+                        
+                        if not serial_moves:
+                            results.append({
+                                'epc': epc,
+                                'success': False,
+                                'error': 'No serial-tracked products need receiving',
+                                'mode': 'new'
+                            })
+                            error_count += 1
+                            continue
+                        
+                        # Take the first move that needs receiving
+                        move = serial_moves[0]
+                        product = move.product_id
+                        
+                        # Create new lot/serial number
+                        new_lot = request.env['stock.lot'].create({
+                            'name': epc,
+                            'product_id': product.id,
+                            'company_id': picking.company_id.id,
+                        })
+                        
+                        # Create move line with new lot
+                        request.env['stock.move.line'].create({
+                            'move_id': move.id,
+                            'product_id': product.id,
+                            'product_uom_id': move.product_uom.id,
+                            'location_id': move.location_id.id,
+                            'location_dest_id': move.location_dest_id.id,
+                            'quantity': 1.0,
+                            'picking_id': picking_id,
+                            'lot_id': new_lot.id,
+                        })
+                        
                         results.append({
                             'epc': epc,
-                            'success': False,
-                            'error': f'Product "{product.name}" not found in this picking'
+                            'success': True,
+                            'product_name': product.name,
+                            'product_id': product.id,
+                            'lot_id': new_lot.id,
+                            'message': 'New tag added',
+                            'mode': 'new'
                         })
-                        error_count += 1
-                        continue
+                        success_count += 1
 
-                    move = move[0]  # Take first match
-
-                    # Check if this lot already has a move line in this picking
-                    existing_line = request.env['stock.move.line'].search([
-                        ('move_id', '=', move.id),
-                        ('lot_id', '=', lot.id),
-                        ('picking_id', '=', picking_id)
-                    ], limit=1)
-
-                    if existing_line:
-                        results.append({
-                            'epc': epc,
-                            'success': False,
-                            'error': 'This lot has already been scanned'
-                        })
-                        error_count += 1
-                        continue
-
-                    # Create a new move line with lot (quantity = 1 per RFID tag)
-                    request.env['stock.move.line'].create({
-                        'move_id': move.id,
-                        'product_id': product.id,
-                        'product_uom_id': move.product_uom.id,
-                        'location_id': move.location_id.id,
-                        'location_dest_id': move.location_dest_id.id,
-                        'quantity': 1.0,
-                        'picking_id': picking_id,
-                        'lot_id': lot.id,
-                    })
-
-                    # Get updated quantity done for this move
-                    updated_qty = sum(move.move_line_ids.mapped('quantity'))
-
+                except Exception as e:
                     results.append({
                         'epc': epc,
-                        'success': True,
-                        'product_name': product.name,
-                        'product_id': product.id,
+                        'success': False,
+                        'error': str(e)
+                    })
+                    error_count += 1
+
+            return {
+                'success': True,
+                'data': {
+                    'results': results,
+                    'success_count': success_count,
+                    'error_count': error_count,
+                    'total': len(rfid_tags)
+                }
+            }
+
+        return self._handle_request(handler, **kwargs)
                         'lot_name': lot.name,
                         'quantity_done': updated_qty
                     })
