@@ -857,32 +857,6 @@ class MobileInventoryController(http.Controller):
             }
 
         return self._handle_request(handler, **kwargs)
-                        'lot_name': lot.name,
-                        'quantity_done': updated_qty
-                    })
-                    success_count += 1
-
-                except Exception as e:
-                    _logger.error(f"Error processing RFID tag {epc}: {str(e)}")
-                    results.append({
-                        'epc': epc,
-                        'success': False,
-                        'error': str(e)
-                    })
-                    error_count += 1
-
-            return {
-                'success': True,
-                'message': f'Processed {len(rfid_tags)} tags: {success_count} successful, {error_count} failed',
-                'data': {
-                    'total': len(rfid_tags),
-                    'success_count': success_count,
-                    'error_count': error_count,
-                    'results': results
-                }
-            }
-        
-        return self._handle_request(handler)
 
     @http.route('/api/mobile/pickings/<int:picking_id>/validate', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def validate_picking(self, picking_id, **kwargs):
