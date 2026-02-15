@@ -133,12 +133,14 @@ export const rfidService = {
 
                 console.log("✅ POS Product found:", posProduct);
 
-                // Add product to current order
+                // Add product to current order (Odoo 18 method)
                 if (pos.config.rfid_auto_add) {
                     const currentOrder = pos.get_order();
                     if (currentOrder) {
                         console.log("➕ Adding product to order:", posProduct.display_name);
-                        await currentOrder.add_product(posProduct, {
+                        
+                        // Use Odoo 18 method to add product
+                        pos.add_product_to_current_order(posProduct, {
                             quantity: 1,
                         });
                         
