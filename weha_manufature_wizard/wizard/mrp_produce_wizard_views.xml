@@ -80,8 +80,6 @@
                                    invisible="product_tracking not in ['lot', 'serial'] or lot_producing_id != False"/>
                         </group>
                     </group>
-                        </group>
-                    </group>
                     
                 </sheet>
                 <footer>
