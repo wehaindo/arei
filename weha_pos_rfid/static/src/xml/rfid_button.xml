@@ -8,10 +8,4 @@
             </span>
         </div>
     </t>
-
-    <t t-name="weha_pos_rfid.ProductScreenButtons" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
-        <xpath expr="//div[@class='control-buttons']" position="inside">
-            <RFIDButton t-if="pos.config.rfid_enabled"/>
-        </xpath>
-    </t>
 </templates>
