@@ -52,7 +52,9 @@ export const rfidService = {
                         console.log("RFID WebSocket message:", data);
 
                         if (data.type === "tag" && data.epc) {
-                            handleRFIDTag(data.epc, data.rssi);
+                            // Extract UID from EPC (last 12 characters typically)
+                            const uid = data.epc.length > 12 ? data.epc.slice(-12) : data.epc;
+                            handleRFIDTag(uid, data.rssi, data.epc);
                         } else if (data.type === "welcome") {
                             console.log("RFID Server:", data.message);
                         }
@@ -89,11 +91,11 @@ export const rfidService = {
         /**
          * Handle scanned RFID tag
          */
-        async function handleRFIDTag(epc, rssi) {
-            console.log("📡 RFID Tag scanned:", epc, "RSSI:", rssi);
+        async function handleRFIDTag(uid, rssi, fullEpc) {
+            console.log("📡 RFID Tag scanned - UID:", uid, "RSSI:", rssi, "Full EPC:", fullEpc);
 
-            // Just display the EPC tag
-            env.services.notification.add(`RFID Tag: ${epc}`, {
+            // Just display the shorter UID
+            env.services.notification.add(`RFID Tag: ${uid}`, {
                 type: "info",
             });
         }
