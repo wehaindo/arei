@@ -786,26 +786,32 @@ class MobileInventoryController(http.Controller):
                     
                     else:
                         # MODE 2: New lot - need to determine product and create lot + move line
-                        # For manufacturing receipts, find a product with serial tracking that needs receiving
+                        # For manufacturing receipts, find a product that needs receiving
                         
-                        # Find moves with serial tracking products that have remaining quantity
-                        serial_moves = picking.move_ids_without_package.filtered(
-                            lambda m: m.product_id.tracking == 'serial' and 
+                        # First try: Find moves with tracking (serial or lot) that have remaining quantity
+                        tracked_moves = picking.move_ids_without_package.filtered(
+                            lambda m: m.product_id.tracking in ['serial', 'lot'] and 
                             sum(m.move_line_ids.mapped('quantity')) < m.product_uom_qty
                         )
                         
-                        if not serial_moves:
+                        if not tracked_moves:
+                            # Try to find any move that needs receiving (even without tracking)
+                            tracked_moves = picking.move_ids_without_package.filtered(
+                                lambda m: sum(m.move_line_ids.mapped('quantity')) < m.product_uom_qty
+                            )
+                        
+                        if not tracked_moves:
                             results.append({
                                 'epc': epc,
                                 'success': False,
-                                'error': 'No serial-tracked products need receiving',
+                                'error': 'No products need receiving in this picking',
                                 'mode': 'new'
                             })
                             error_count += 1
                             continue
                         
                         # Take the first move that needs receiving
-                        move = serial_moves[0]
+                        move = tracked_moves[0]
                         product = move.product_id
                         
                         # Create new lot/serial number
@@ -815,7 +821,7 @@ class MobileInventoryController(http.Controller):
                             'company_id': picking.company_id.id,
                         })
                         
-                        # Create move line with new lot
+                        # Create move line with new lot (1 qty per RFID tag)
                         request.env['stock.move.line'].create({
                             'move_id': move.id,
                             'product_id': product.id,
@@ -833,7 +839,7 @@ class MobileInventoryController(http.Controller):
                             'product_name': product.name,
                             'product_id': product.id,
                             'lot_id': new_lot.id,
-                            'message': 'New tag added',
+                            'message': f'New tag added for {product.name}',
                             'mode': 'new'
                         })
                         success_count += 1
