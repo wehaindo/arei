@@ -92,60 +92,10 @@ export const rfidService = {
         async function handleRFIDTag(epc, rssi) {
             console.log("📡 RFID Tag scanned:", epc, "RSSI:", rssi);
 
-            try {
-                // Search for product by lot/serial number (EPC)
-                const lot = await searchLotByEPC(epc);
-                
-                if (!lot) {
-                    env.services.notification.add(`Tag ${epc} not found in system`, {
-                        type: "warning",
-                    });
-                    return;
-                }
-
-                const product = lot.product_id;
-                if (!product) {
-                    env.services.notification.add(`No product associated with tag ${epc}`, {
-                        type: "warning",
-                    });
-                    return;
-                }
-
-                // Get product details from POS
-                const posProduct = pos.db.get_product_by_id(product[0]);
-                
-                if (!posProduct) {
-                    env.services.notification.add(`Product ${product[1]} not available in POS`, {
-                        type: "warning",
-                    });
-                    return;
-                }
-
-                // Add product to current order
-                if (config.rfid_auto_add) {
-                    const currentOrder = pos.get_order();
-                    if (currentOrder) {
-                        currentOrder.add_product(posProduct, {
-                            quantity: 1,
-                            merge: false, // Don't merge with existing lines for tracked products
-                        });
-                        
-                        env.services.notification.add(`Added: ${posProduct.display_name}`, {
-                            type: "success",
-                        });
-                    }
-                } else {
-                    env.services.notification.add(`Found: ${posProduct.display_name}`, {
-                        type: "info",
-                    });
-                }
-
-            } catch (error) {
-                console.error("Error handling RFID tag:", error);
-                env.services.notification.add(`Error processing tag: ${error.message}`, {
-                    type: "danger",
-                });
-            }
+            // Just display the EPC tag
+            env.services.notification.add(`RFID Tag: ${epc}`, {
+                type: "info",
+            });
         }
 
         /**
