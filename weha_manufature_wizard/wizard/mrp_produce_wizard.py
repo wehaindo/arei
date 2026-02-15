@@ -4,6 +4,34 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 
 
+class MrpProduceWizardComponent(models.TransientModel):
+    _name = 'mrp.produce.wizard.component'
+    _description = 'Manufacturing Wizard Component Line'
+
+    wizard_id = fields.Many2one('mrp.produce.wizard', string='Wizard', required=True, ondelete='cascade')
+    move_id = fields.Many2one('stock.move', string='Stock Move')
+    product_id = fields.Many2one('product.product', string='Product', required=True)
+    product_tracking = fields.Selection(related='product_id.tracking', string='Tracking')
+    product_uom_id = fields.Many2one('uom.uom', string='Unit of Measure', required=True)
+    qty_to_consume = fields.Float('To Consume', required=True)
+    qty_done = fields.Float('Consumed', required=True)
+    
+    # Lot/Serial for component
+    lot_id = fields.Many2one('stock.lot', string='Lot/Serial Number')
+    lot_name = fields.Char('Lot/Serial Number Name')
+    
+    @api.onchange('qty_done')
+    def _onchange_qty_done(self):
+        if self.product_tracking == 'serial' and self.qty_done > 1:
+            self.qty_done = 1
+            return {
+                'warning': {
+                    'title': _('Warning'),
+                    'message': _('Serial tracked products can only have quantity 1.')
+                }
+            }
+
+
 class MrpProduceWizard(models.TransientModel):
     _name = 'mrp.produce.wizard'
     _description = 'Manufacturing Order Production Wizard'
@@ -212,31 +240,3 @@ class MrpProduceWizard(models.TransientModel):
         """Scan lot/serial using barcode"""
         # This can be extended to support barcode scanning
         pass
-
-
-class MrpProduceWizardComponent(models.TransientModel):
-    _name = 'mrp.produce.wizard.component'
-    _description = 'Manufacturing Wizard Component Line'
-
-    wizard_id = fields.Many2one('mrp.produce.wizard', string='Wizard', required=True, ondelete='cascade')
-    move_id = fields.Many2one('stock.move', string='Stock Move')
-    product_id = fields.Many2one('product.product', string='Product', required=True)
-    product_tracking = fields.Selection(related='product_id.tracking', string='Tracking')
-    product_uom_id = fields.Many2one('uom.uom', string='Unit of Measure', required=True)
-    qty_to_consume = fields.Float('To Consume', required=True)
-    qty_done = fields.Float('Consumed', required=True)
-    
-    # Lot/Serial for component
-    lot_id = fields.Many2one('stock.lot', string='Lot/Serial Number')
-    lot_name = fields.Char('Lot/Serial Number Name')
-    
-    @api.onchange('qty_done')
-    def _onchange_qty_done(self):
-        if self.product_tracking == 'serial' and self.qty_done > 1:
-            self.qty_done = 1
-            return {
-                'warning': {
-                    'title': _('Warning'),
-                    'message': _('Serial tracked products can only have quantity 1.')
-                }
-            }
