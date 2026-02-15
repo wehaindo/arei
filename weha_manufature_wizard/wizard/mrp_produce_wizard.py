@@ -165,18 +165,6 @@ class MrpProduceWizard(models.TransientModel):
         
         production = self.production_id
         
-        # Create or get lot for finished product
-        lot_id = False
-        if self.product_tracking in ['lot', 'serial']:
-            if self.lot_producing_id:
-                lot_id = self.lot_producing_id.id
-            elif self.lot_name:
-                lot_id = self.env['stock.lot'].create({
-                    'name': self.lot_name,
-                    'product_id': self.product_id.id,
-                    'company_id': production.company_id.id,
-                }).id
-        
         # Process component consumption
         for component in self.component_line_ids:
             if component.qty_done > 0:
@@ -194,35 +182,75 @@ class MrpProduceWizard(models.TransientModel):
                             'company_id': production.company_id.id,
                         }).id
                 
-                # Create move line for component
-                self.env['stock.move.line'].create({
-                    'move_id': move.id,
-                    'product_id': component.product_id.id,
-                    'product_uom_id': component.product_uom_id.id,
-                    'quantity': component.qty_done,
-                    'lot_id': component_lot_id,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                })
+                # Find or create move line for component
+                existing_line = move.move_line_ids.filtered(
+                    lambda ml: not ml.lot_id and ml.quantity == 0
+                )[:1]
+                
+                if existing_line:
+                    # Update existing move line
+                    existing_line.write({
+                        'quantity': component.qty_done,
+                        'lot_id': component_lot_id,
+                    })
+                else:
+                    # Create new move line if none exists
+                    self.env['stock.move.line'].create({
+                        'move_id': move.id,
+                        'product_id': component.product_id.id,
+                        'product_uom_id': component.product_uom_id.id,
+                        'quantity': component.qty_done,
+                        'lot_id': component_lot_id,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                    })
         
-        # Create finished product move line
+        # Process finished product with lot/serial
         finished_move = production.move_finished_ids.filtered(
             lambda m: m.product_id == self.product_id and m.state not in ['done', 'cancel']
         )[:1]
         
         if finished_move:
-            self.env['stock.move.line'].create({
-                'move_id': finished_move.id,
-                'product_id': self.product_id.id,
-                'product_uom_id': self.product_uom_id.id,
-                'quantity': self.qty_producing,
-                'lot_id': lot_id,
-                'location_id': finished_move.location_id.id,
-                'location_dest_id': finished_move.location_dest_id.id,
-            })
+            # Create or get lot for finished product
+            lot_id = False
+            if self.product_tracking in ['lot', 'serial']:
+                if self.lot_producing_id:
+                    lot_id = self.lot_producing_id.id
+                elif self.lot_name:
+                    lot_id = self.env['stock.lot'].create({
+                        'name': self.lot_name,
+                        'product_id': self.product_id.id,
+                        'company_id': production.company_id.id,
+                    }).id
+            
+            # Find existing move line without lot/serial
+            existing_line = finished_move.move_line_ids.filtered(
+                lambda ml: not ml.lot_id and ml.quantity == 0
+            )[:1]
+            
+            if existing_line:
+                # Update existing move line with lot/serial
+                existing_line.write({
+                    'quantity': self.qty_producing,
+                    'lot_id': lot_id,
+                })
+            else:
+                # Create new move line
+                self.env['stock.move.line'].create({
+                    'move_id': finished_move.id,
+                    'product_id': self.product_id.id,
+                    'product_uom_id': self.product_uom_id.id,
+                    'quantity': self.qty_producing,
+                    'lot_id': lot_id,
+                    'location_id': finished_move.location_id.id,
+                    'location_dest_id': finished_move.location_dest_id.id,
+                })
         
-        # Check if production is complete
-        if production.qty_produced + self.qty_producing >= production.product_qty:
+        # Update production quantity done
+        production._set_qty_producing()
+        
+        # Check if production is complete and mark done if needed
+        if production.qty_producing >= production.product_qty:
             production.button_mark_done()
         
         return {
