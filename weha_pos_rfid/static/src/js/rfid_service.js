@@ -94,10 +94,75 @@ export const rfidService = {
         async function handleRFIDTag(uid, rssi, fullEpc) {
             console.log("📡 RFID Tag scanned - UID:", uid, "RSSI:", rssi, "Full EPC:", fullEpc);
 
-            // Just display the shorter UID
-            env.services.notification.add(`RFID Tag: ${uid}`, {
-                type: "info",
-            });
+            try {
+                // Search for product by lot/serial number using full EPC
+                console.log("🔍 Searching for lot with EPC:", fullEpc);
+                const lot = await searchLotByEPC(fullEpc);
+                
+                if (!lot) {
+                    console.warn("⚠️ Lot not found for EPC:", fullEpc);
+                    env.services.notification.add(`Tag ${uid} not found in system`, {
+                        type: "warning",
+                    });
+                    return;
+                }
+
+                console.log("✅ Lot found:", lot);
+
+                const product = lot.product_id;
+                if (!product) {
+                    console.warn("⚠️ No product linked to lot:", lot.name);
+                    env.services.notification.add(`No product associated with tag ${uid}`, {
+                        type: "warning",
+                    });
+                    return;
+                }
+
+                console.log("📦 Product from lot:", product);
+
+                // Get product details from POS
+                const posProduct = pos.db.get_product_by_id(product[0]);
+                
+                if (!posProduct) {
+                    console.warn("⚠️ Product not available in POS:", product[1]);
+                    env.services.notification.add(`Product ${product[1]} not available in POS`, {
+                        type: "warning",
+                    });
+                    return;
+                }
+
+                console.log("✅ POS Product found:", posProduct);
+
+                // Add product to current order
+                if (config.rfid_auto_add) {
+                    const currentOrder = pos.get_order();
+                    if (currentOrder) {
+                        console.log("➕ Adding product to order:", posProduct.display_name);
+                        currentOrder.add_product(posProduct, {
+                            quantity: 1,
+                            merge: false, // Don't merge with existing lines for tracked products
+                        });
+                        
+                        env.services.notification.add(`Added: ${posProduct.display_name}`, {
+                            type: "success",
+                        });
+                        console.log("✅ Product added successfully");
+                    } else {
+                        console.warn("⚠️ No current order");
+                    }
+                } else {
+                    env.services.notification.add(`Found: ${posProduct.display_name}`, {
+                        type: "info",
+                    });
+                    console.log("ℹ️ Auto-add disabled, product not added");
+                }
+
+            } catch (error) {
+                console.error("❌ Error handling RFID tag:", error);
+                env.services.notification.add(`Error processing tag: ${error.message}`, {
+                    type: "danger",
+                });
+            }
         }
 
         /**

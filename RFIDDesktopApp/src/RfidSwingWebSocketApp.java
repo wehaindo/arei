@@ -105,18 +105,47 @@ public class RfidSwingWebSocketApp extends JFrame {
                     long now = System.currentTimeMillis();
 
                     if (tag != null) {
+                        // Try multiple methods to get the actual tag ID
                         String epc = tag.getEPC();
+                        String tid = tag.getTid();
                         String rssi = tag.getRssi();
+                        
+                        // Clean up the tag ID by removing trailing zeros
+                        String tagId = null;
+                        if (epc != null && !epc.isEmpty()) {
+                            tagId = epc.replaceAll("0+$", ""); // Remove trailing zeros
+                            if (tagId.isEmpty() || tagId.length() < 4) {
+                                tagId = null; // EPC was all zeros or too short
+                            } else {
+                                // Add E2 prefix if not present (standard UHF RFID Gen2 format)
+                                if (!tagId.startsWith("E2")) {
+                                    tagId = "E2" + tagId;
+                                }
+                            }
+                        }
+                        
+                        // If EPC is not valid, try TID
+                        if (tagId == null && tid != null && !tid.isEmpty()) {
+                            tagId = tid.replaceAll("0+$", ""); // Remove trailing zeros
+                            if (tagId.isEmpty() || tagId.length() < 4) {
+                                tagId = null;
+                            }
+                        }
+                        
+                        // If no valid tag ID, skip
+                        if (tagId == null) {
+                            continue;
+                        }
 
                         // Check if this tag has ever been sent before
-                        if (!seenTags.contains(epc)) {
+                        if (!seenTags.contains(tagId)) {
                             // This is a truly new unique tag
-                            seenTags.add(epc);
+                            seenTags.add(tagId);
                             
-                            TagMessage msg = new TagMessage(epc, rssi, now, true);
+                            TagMessage msg = new TagMessage(tagId, rssi, now, true);
                             String json = gson.toJson(msg);
 
-                            appendLog("📡 UNIQUE TAG [" + seenTags.size() + "]: " + epc + " | RSSI: " + rssi);
+                            appendLog("📡 UNIQUE TAG [" + seenTags.size() + "]: " + tagId + " | RSSI: " + rssi);
                             if (wsServer != null) wsServer.broadcast(json);
                         }
                         // If tag already exists in seenTags, do nothing (silently ignore)
