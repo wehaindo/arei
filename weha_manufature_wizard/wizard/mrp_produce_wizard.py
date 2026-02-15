@@ -188,7 +188,6 @@ class MrpProduceWizard(models.TransientModel):
             
             if move_line:
                 move_line.write({
-                    'quantity': self.qty_producing,
                     'lot_id': lot_id,
                 })
         
@@ -214,23 +213,15 @@ class MrpProduceWizard(models.TransientModel):
                 
                 if move_line:
                     move_line.write({
-                        'quantity': component.qty_done,
                         'lot_id': component_lot_id,
                     })
-        
-        # Update production quantity done
-        production._set_qty_producing()
-        
-        # Check if production is complete and mark done if needed
-        if production.qty_producing >= production.product_qty:
-            production.button_mark_done()
         
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Success'),
-                'message': _('Production recorded: %s %s produced.') % (self.qty_producing, self.product_uom_id.name),
+                'message': _('Lot/Serial number updated. Continue to process remaining units.'),
                 'type': 'success',
                 'sticky': False,
             }
