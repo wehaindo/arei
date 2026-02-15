@@ -6,7 +6,7 @@
         <field name="name">mrp.produce.wizard.component.tree</field>
         <field name="model">mrp.produce.wizard.component</field>
         <field name="arch" type="xml">
-            <tree editable="bottom">
+            <list editable="bottom">
                 <field name="product_id" readonly="1"/>
                 <field name="product_tracking" column_invisible="1"/>
                 <field name="qty_to_consume" readonly="1"/>
@@ -18,7 +18,7 @@
                 <field name="lot_name" 
                        placeholder="Or enter lot/serial"
                        optional="show"/>
-            </tree>
+            </list>
         </field>
     </record>
     
