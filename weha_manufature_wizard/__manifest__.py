@@ -16,8 +16,8 @@
     'depends': ['mrp', 'stock'],
     'data': [
         'security/ir.model.access.csv',
-        'wizard/mrp_produce_wizard_views.xml',
         'views/mrp_production_views.xml',
+        'wizard/mrp_produce_wizard_views.xml',
     ],
     'installable': True,
     'application': False,
