@@ -5,27 +5,12 @@
         <field name="model">pos.config</field>
         <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//page[@name='products']" position="after">
-                <page string="RFID Settings" name="rfid_settings">
-                    <group>
-                        <group>
-                            <field name="rfid_enabled"/>
-                            <field name="rfid_websocket_url" invisible="not rfid_enabled"/>
-                        </group>
-                        <group>
-                            <field name="rfid_auto_add" invisible="not rfid_enabled"/>
-                        </group>
-                    </group>
-                    <div class="alert alert-info" role="alert" invisible="not rfid_enabled">
-                        <strong>RFID Integration</strong>
-                        <ul>
-                            <li>Ensure the RFID Desktop Application is running</li>
-                            <li>Default WebSocket URL: ws://localhost:8081</li>
-                            <li>Products will be added automatically when RFID tags are scanned</li>
-                            <li>Tags must match lot/serial numbers in the system</li>
-                        </ul>
-                    </div>
-                </page>
+            <xpath expr="//form" position="inside">
+                <group string="RFID Settings" name="rfid_settings">
+                    <field name="rfid_enabled"/>
+                    <field name="rfid_websocket_url" invisible="not rfid_enabled"/>
+                    <field name="rfid_auto_add" invisible="not rfid_enabled"/>
+                </group>
             </xpath>
         </field>
     </record>
