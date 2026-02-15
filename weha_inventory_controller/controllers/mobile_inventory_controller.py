@@ -277,6 +277,85 @@ class MobileInventoryController(http.Controller):
             )
             return self._apply_cors_headers(response)
 
+    # ==================== DASHBOARD ====================
+
+    @http.route('/api/mobile/dashboard/stats', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def get_dashboard_stats(self, **kwargs):
+        """
+        Get dashboard statistics
+        Returns aggregated data for today's operations, upcoming pickings, and pending operations
+        """
+        def handler(data):
+            try:
+                from datetime import date
+                
+                # Get today's date
+                today = date.today()
+                today_str = today.strftime('%Y-%m-%d')
+                tomorrow = today + timedelta(days=1)
+                tomorrow_str = tomorrow.strftime('%Y-%m-%d')
+                
+                # Get all pickings
+                all_pickings = request.env['stock.picking'].search([])
+                
+                # Filter by picking types
+                receipts = all_pickings.filtered(lambda p: p.picking_type_id.code == 'incoming')
+                deliveries = all_pickings.filtered(lambda p: p.picking_type_id.code == 'outgoing')
+                transfers = all_pickings.filtered(lambda p: p.picking_type_id.code == 'internal')
+                
+                # Today's operations
+                today_receipts = receipts.filtered(
+                    lambda p: p.scheduled_date and p.scheduled_date.date() == today
+                )
+                today_deliveries = deliveries.filtered(
+                    lambda p: p.scheduled_date and p.scheduled_date.date() == today
+                )
+                today_transfers = transfers.filtered(
+                    lambda p: p.scheduled_date and p.scheduled_date.date() == today
+                )
+                
+                # Upcoming pickings (tomorrow and later)
+                upcoming_pickings = all_pickings.filtered(
+                    lambda p: p.scheduled_date and p.scheduled_date.date() >= tomorrow
+                )
+                
+                # Pending operations (confirmed, waiting, assigned states)
+                pending_states = ['confirmed', 'waiting', 'assigned']
+                pending_receipts = receipts.filtered(lambda p: p.state in pending_states)
+                pending_deliveries = deliveries.filtered(lambda p: p.state in pending_states)
+                pending_transfers = transfers.filtered(lambda p: p.state in pending_states)
+                
+                # Count total products (optional - can be expensive for large datasets)
+                # total_products = request.env['product.product'].search_count([('active', '=', True)])
+                
+                stats = {
+                    'today_pickings': len(today_receipts) + len(today_deliveries) + len(today_transfers),
+                    'today_receipts': len(today_receipts),
+                    'today_deliveries': len(today_deliveries),
+                    'today_transfers': len(today_transfers),
+                    'next_pickings': len(upcoming_pickings),
+                    'pending_receipts': len(pending_receipts),
+                    'pending_deliveries': len(pending_deliveries),
+                    'pending_transfers': len(pending_transfers),
+                    'total_products': 0,  # Set to 0 to avoid performance impact
+                }
+                
+                return {
+                    'success': True,
+                    'data': stats
+                }
+                
+            except Exception as e:
+                _logger.error(f"Dashboard stats error: {str(e)}")
+                import traceback
+                _logger.error(traceback.format_exc())
+                return {
+                    'success': False,
+                    'error': str(e)
+                }
+        
+        return self._handle_request(handler, require_auth=True)
+
     # ==================== UNIFIED STOCK PICKING OPERATIONS ====================
 
     @http.route('/api/mobile/operation-types', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)

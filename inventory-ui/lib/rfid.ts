@@ -4,6 +4,8 @@ export interface RFIDTag {
   epc: string;
   rssi?: number;
   count?: number;
+  status?: 'pending' | 'success' | 'error';
+  error?: string;
 }
 
 export interface RFIDReadResult {

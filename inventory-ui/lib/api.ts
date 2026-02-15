@@ -130,6 +130,11 @@ class OdooApiService {
     return !!this.token;
   }
 
+  // Dashboard operations
+  async getDashboardStats() {
+    return this.makeRequest("/api/mobile/dashboard/stats", {});
+  }
+
   // Internal Transfers operations (alias for backward compatibility)
   async listInternalTransfers(params: {
     state?: string;
