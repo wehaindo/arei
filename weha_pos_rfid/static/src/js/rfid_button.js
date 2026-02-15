@@ -1,9 +1,9 @@
 /** @odoo-module */
 
 import { Component } from "@odoo/owl";
-import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { useService } from "@web/core/utils/hooks";
 import { usePos } from "@point_of_sale/app/store/pos_hook";
+import { registry } from "@web/core/registry";
 
 /**
  * RFID Button Component for POS
@@ -63,9 +63,3 @@ export class RFIDButton extends Component {
         }
     }
 }
-
-// Add button to ProductScreen controlButtons
-ProductScreen.addControlButton({
-    component: RFIDButton,
-    position: ["before", "SetFiscalPositionButton"],
-});
