@@ -12,13 +12,18 @@ export const rfidService = {
     start(env, { pos }) {
         let websocket = null;
         let isConnected = false;
+        let isConnecting = false;
         let reconnectTimer = null;
-        const reconnectDelay = 3000; // 3 seconds
+        let reconnectAttempts = 0;
+        const baseReconnectDelay = 2000; // 2 seconds
+        const maxReconnectDelay = 30000; // 30 seconds
+        const maxReconnectAttempts = 10; // Max attempts before giving up
+        let shouldReconnect = true; // Flag to control auto-reconnect
 
         /**
          * Connect to RFID WebSocket server
          */
-        function connect() {
+        function connect(manualRetry = false) {
             const config = pos.config;
             
             if (!config.rfid_enabled) {
@@ -26,16 +31,48 @@ export const rfidService = {
                 return;
             }
 
+            // Prevent multiple simultaneous connection attempts
+            if (isConnecting) {
+                console.log("⏳ Connection attempt already in progress...");
+                return;
+            }
+
+            // Check if max retry attempts reached
+            if (!manualRetry && maxReconnectAttempts > 0 && reconnectAttempts >= maxReconnectAttempts) {
+                console.warn("❌ Max reconnection attempts reached. Use manual retry.");
+                env.services.notification.add(
+                    `RFID connection failed after ${maxReconnectAttempts} attempts. Click to retry manually.`,
+                    {
+                        type: "danger",
+                        sticky: true,
+                    }
+                );
+                return;
+            }
+
             const wsUrl = config.rfid_websocket_url || "ws://localhost:8081";
-            console.log("Connecting to RFID WebSocket:", wsUrl);
+            const attemptInfo = reconnectAttempts > 0 ? ` (Attempt ${reconnectAttempts + 1})` : "";
+            console.log(`Connecting to RFID WebSocket: ${wsUrl}${attemptInfo}`);
+
+            isConnecting = true;
 
             try {
                 websocket = new WebSocket(wsUrl);
 
                 websocket.onopen = function() {
                     isConnected = true;
+                    isConnecting = false;
+                    reconnectAttempts = 0; // Reset attempts on successful connection
+                    shouldReconnect = true;
+                    
+                    const wasReconnecting = reconnectTimer !== null;
                     console.log("✅ Connected to RFID WebSocket server");
-                    env.services.notification.add("Connected to RFID reader", {
+                    
+                    const message = wasReconnecting 
+                        ? "Reconnected to RFID reader" 
+                        : "Connected to RFID reader";
+                    
+                    env.services.notification.add(message, {
                         type: "success",
                     });
                     
@@ -64,27 +101,74 @@ export const rfidService = {
                 };
 
                 websocket.onerror = function(error) {
+                    isConnecting = false;
                     console.error("RFID WebSocket error:", error);
-                    env.services.notification.add("RFID reader connection error", {
-                        type: "danger",
-                    });
+                    
+                    // Only show notification on first error or every 5th attempt
+                    if (reconnectAttempts === 0 || reconnectAttempts % 5 === 0) {
+                        env.services.notification.add(
+                            `RFID reader connection error (Attempt ${reconnectAttempts + 1})`,
+                            { type: "danger" }
+                        );
+                    }
                 };
 
-                websocket.onclose = function() {
+                websocket.onclose = function(event) {
                     isConnected = false;
-                    console.log("RFID WebSocket closed");
+                    isConnecting = false;
                     
-                    // Try to reconnect after delay
-                    if (!reconnectTimer) {
+                    const closeReason = event.reason || "Connection closed";
+                    console.log(`RFID WebSocket closed: ${closeReason} (Code: ${event.code})`);
+                    
+                    // Auto-reconnect if enabled and not a normal closure
+                    if (shouldReconnect && event.code !== 1000) {
+                        reconnectAttempts++;
+                        
+                        // Calculate exponential backoff delay
+                        const delay = Math.min(
+                            baseReconnectDelay * Math.pow(1.5, reconnectAttempts - 1),
+                            maxReconnectDelay
+                        );
+                        
+                        console.log(`⏳ Reconnecting in ${(delay/1000).toFixed(1)}s... (Attempt ${reconnectAttempts})`);
+                        
+                        // Clear any existing timer
+                        if (reconnectTimer) {
+                            clearTimeout(reconnectTimer);
+                        }
+                        
+                        // Schedule reconnection
                         reconnectTimer = setTimeout(() => {
-                            console.log("Attempting to reconnect to RFID...");
+                            reconnectTimer = null;
+                            console.log(`🔄 Attempting to reconnect to RFID... (Attempt ${reconnectAttempts})`);
                             connect();
-                        }, reconnectDelay);
+                        }, delay);
+                    } else if (event.code === 1000) {
+                        console.log("✅ RFID WebSocket closed normally");
                     }
                 };
 
             } catch (error) {
+                isConnecting = false;
                 console.error("Failed to create RFID WebSocket:", error);
+                env.services.notification.add(
+                    `Failed to connect to RFID reader: ${error.message}`,
+                    { type: "danger" }
+                );
+                
+                // Try to reconnect on connection creation failure
+                if (shouldReconnect) {
+                    reconnectAttempts++;
+                    const delay = Math.min(
+                        baseReconnectDelay * Math.pow(1.5, reconnectAttempts - 1),
+                        maxReconnectDelay
+                    );
+                    
+                    reconnectTimer = setTimeout(() => {
+                        reconnectTimer = null;
+                        connect();
+                    }, delay);
+                }
             }
         }
 
@@ -139,8 +223,8 @@ export const rfidService = {
                     if (currentOrder) {
                         console.log("➕ Adding product to order:", posProduct.display_name);
                         
-                        // Use Odoo 18 method to add product
-                        pos.add_product_to_current_order(posProduct, {
+                        // Odoo 18: Use the order's add_product method
+                        await currentOrder.add_product(posProduct, {
                             quantity: 1,
                         });
                         
@@ -189,8 +273,10 @@ export const rfidService = {
          * Disconnect from RFID WebSocket
          */
         function disconnect() {
+            shouldReconnect = false; // Disable auto-reconnect
+            
             if (websocket) {
-                websocket.close();
+                websocket.close(1000, "Manual disconnect"); // Normal closure
                 websocket = null;
             }
             if (reconnectTimer) {
@@ -198,15 +284,46 @@ export const rfidService = {
                 reconnectTimer = null;
             }
             isConnected = false;
+            isConnecting = false;
+            reconnectAttempts = 0;
+            console.log("🔌 Disconnected from RFID reader");
         }
 
         /**
-         * Clear seen tags on RFID reader
+         * Clear seen tags on RFID reader (for new transaction)
          */
         function clearSeenTags() {
             if (websocket && isConnected) {
-                websocket.send(JSON.stringify({ action: "clearSeen" }));
+                websocket.send(JSON.stringify({ clearSeen: true }));
+                console.log("🔄 Sent transaction reset to RFID reader");
+            } else {
+                console.warn("⚠️ Cannot clear tags - not connected to RFID reader");
             }
+        }
+
+        /**
+         * Manually retry connection (resets attempt counter)
+         */
+        function retryConnection() {
+            reconnectAttempts = 0;
+            shouldReconnect = true;
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            connect(true);
+        }
+
+        /**
+         * Get connection status
+         */
+        function getStatus() {
+            return {
+                connected: isConnected,
+                connecting: isConnecting,
+                attempts: reconnectAttempts,
+                willReconnect: shouldReconnect,
+            };
         }
 
         // Auto-connect when service starts
@@ -218,9 +335,14 @@ export const rfidService = {
         return {
             connect,
             disconnect,
+            reconnect: retryConnection,
             clearSeenTags,
+            getStatus,
             get isConnected() {
                 return isConnected;
+            },
+            get isConnecting() {
+                return isConnecting;
             },
         };
     },
