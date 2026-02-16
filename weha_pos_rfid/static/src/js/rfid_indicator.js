@@ -56,16 +56,20 @@ patch(Navbar.prototype, {
             return;
         }
         
-        if (!rfidService.isConnected && !rfidService.isConnecting) {
-            rfidService.reconnect();
-        } else if (rfidService.isConnected) {
-            // Sync stock on click when connected
+        // Long press (hold for sync) or right-click = sync stock
+        // Normal click = connect/reconnect RFID
+        const syncStock = async () => {
             await rfidService.syncLotStock();
-        } else {
-            this.notification.add(
-                'RFID Reader is connecting...',
-                { type: 'info' }
-            );
+        };
+        
+        // For now, always sync on click (stock sync works independently)
+        // If disconnected, also attempt to reconnect
+        if (!rfidService.isConnected && !rfidService.isConnecting) {
+            // Try to reconnect RFID
+            rfidService.reconnect();
         }
+        
+        // Always sync stock on click (works with or without RFID)
+        await syncStock();
     }
 });

@@ -90,20 +90,6 @@ export const rfidService = {
                         clearTimeout(reconnectTimer);
                         reconnectTimer = null;
                     }
-                    
-                    // Auto-sync stock when connected (if cache is empty or old)
-                    if (lotStockCache.size === 0 || !lastSyncTime || 
-                        (new Date() - lastSyncTime) > 3600000) { // 1 hour
-                        console.log("🔄 Scheduling auto-sync in 1 second...");
-                        setTimeout(() => {
-                            console.log("🚀 Starting auto-sync now...");
-                            syncLotStock().catch(err => {
-                                console.error("❌ Auto-sync failed:", err);
-                            });
-                        }, 1000); // Delay 1s to avoid blocking
-                    } else {
-                        console.log("✅ Cache already synced, skipping auto-sync");
-                    }
                 };
 
                 websocket.onmessage = function(event) {
@@ -575,6 +561,19 @@ export const rfidService = {
         if (pos.config.rfid_enabled) {
             connect();
         }
+        
+        // Auto-sync stock when service starts (independent of RFID connection)
+        setTimeout(() => {
+            if (lotStockCache.size === 0 || !lastSyncTime || 
+                (new Date() - lastSyncTime) > 3600000) { // 1 hour
+                console.log("🔄 Starting initial stock sync...");
+                syncLotStock().catch(err => {
+                    console.error("❌ Initial stock sync failed:", err);
+                });
+            } else {
+                console.log("✅ Stock cache already synced");
+            }
+        }, 2000); // Delay 2s to let POS fully initialize
 
         // Return service API (expose reactive state)
         return {
