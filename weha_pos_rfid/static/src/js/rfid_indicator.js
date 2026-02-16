@@ -1,90 +1,69 @@
 /** @odoo-module **/
 
-import { Component } from "@odoo/owl";
-import { useService } from "@web/core/utils/hooks";
-import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { Navbar } from "@point_of_sale/app/components/navbar/navbar";
 import { patch } from "@web/core/utils/patch";
 
-/**
- * RFID Connection Status Indicator for POS Navbar
- */
-class RFIDIndicator extends Component {
-    static template = "weha_pos_rfid.RFIDIndicator";
-    static props = {};
-
-    setup() {
-        this.pos = usePos();
-        this.ui = useService("ui");
-        this.rfid = useService("rfid");
-        this.notification = useService("notification");
-    }
-
-    get connectionStatus() {
-        const status = this.rfid.getStatus();
-        return {
-            isConnected: status.connected,
-            isConnecting: status.connecting,
-            attempts: status.attempts,
-            statusText: this.getStatusText(status),
-            statusClass: this.getStatusClass(status),
-            statusIcon: this.getStatusIcon(status),
-        };
-    }
-
-    getStatusText(status) {
-        if (status.connected) {
-            return "RFID Connected";
-        } else if (status.connecting) {
-            return `Connecting${status.attempts > 0 ? ` (${status.attempts})` : ''}...`;
-        } else {
-            return "RFID Disconnected";
-        }
-    }
-
-    getStatusClass(status) {
-        if (status.connected) {
-            return "rfid-connected";
-        } else if (status.connecting) {
-            return "rfid-connecting";
-        } else {
-            return "rfid-disconnected";
-        }
-    }
-
-    getStatusIcon(status) {
-        if (status.connected) {
-            return "fa-wifi text-success";
-        } else if (status.connecting) {
-            return "fa-spinner fa-spin text-warning";
-        } else {
-            return "fa-wifi text-danger";
-        }
-    }
-
-    onClick() {
-        const status = this.rfid.getStatus();
-        
-        if (status.connected) {
-            // Show connected info
-            this.notification.add("RFID reader is connected and ready", {
-                type: "info",
-            });
-        } else if (status.connecting) {
-            this.notification.add(`Connecting to RFID reader (Attempt ${status.attempts})...`, {
-                type: "info",
-            });
-        } else {
-            // Try to reconnect
-            this.rfid.reconnect();
-            this.notification.add("Attempting to reconnect to RFID reader...", {
-                type: "info",
-            });
-        }
-    }
-}
-
-// Patch Navbar to include RFIDIndicator component
 patch(Navbar.prototype, {
-    components: { ...Navbar.components, RFIDIndicator },
+    getRfidStatusClass() {
+        const rfidService = this.env.services.rfid;
+        if (!rfidService) return 'rfid-disconnected';
+        
+        if (rfidService.isConnected) {
+            return 'rfid-connected';
+        } else if (rfidService.isConnecting) {
+            return 'rfid-connecting';
+        } else {
+            return 'rfid-disconnected';
+        }
+    },
+    
+    getRfidStatusIcon() {
+        const rfidService = this.env.services.rfid;
+        if (!rfidService) return 'fa fa-wifi text-danger';
+        
+        if (rfidService.isConnected) {
+            return 'fa fa-wifi text-success';
+        } else if (rfidService.isConnecting) {
+            return 'fa fa-spinner fa-spin text-warning';
+        } else {
+            return 'fa fa-wifi text-danger';
+        }
+    },
+    
+    getRfidStatusText() {
+        const rfidService = this.env.services.rfid;
+        if (!rfidService) return 'RFID: Error';
+        
+        if (rfidService.isConnected) {
+            return 'RFID: Connected';
+        } else if (rfidService.isConnecting) {
+            return 'RFID: Connecting...';
+        } else {
+            return 'RFID: Disconnected';
+        }
+    },
+    
+    onRfidClick() {
+        const rfidService = this.env.services.rfid;
+        if (!rfidService) {
+            this.notification.add('RFID service not available', {
+                type: 'danger'
+            });
+            return;
+        }
+        
+        if (!rfidService.isConnected && !rfidService.isConnecting) {
+            rfidService.retryConnection();
+        } else if (rfidService.isConnected) {
+            this.notification.add(
+                `RFID Reader connected at ws://localhost:${rfidService.port}`,
+                { type: 'success' }
+            );
+        } else {
+            this.notification.add(
+                'RFID Reader is connecting...',
+                { type: 'info' }
+            );
+        }
+    }
 });
