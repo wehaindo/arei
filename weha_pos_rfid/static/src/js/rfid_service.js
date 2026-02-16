@@ -94,7 +94,15 @@ export const rfidService = {
                     // Auto-sync stock when connected (if cache is empty or old)
                     if (lotStockCache.size === 0 || !lastSyncTime || 
                         (new Date() - lastSyncTime) > 3600000) { // 1 hour
-                        setTimeout(() => syncLotStock(), 1000); // Delay 1s to avoid blocking
+                        console.log("🔄 Scheduling auto-sync in 1 second...");
+                        setTimeout(() => {
+                            console.log("🚀 Starting auto-sync now...");
+                            syncLotStock().catch(err => {
+                                console.error("❌ Auto-sync failed:", err);
+                            });
+                        }, 1000); // Delay 1s to avoid blocking
+                    } else {
+                        console.log("✅ Cache already synced, skipping auto-sync");
                     }
                 };
 
@@ -339,9 +347,9 @@ export const rfidService = {
             // If not in cache, fetch from database with location filter
             try {
                 const config = pos.config;
-                const domain = [["name", "=", epc]];
+                let locationId = null;
                 
-                // Filter by store location if configured
+                // Get store location if configured
                 if (config.picking_type_id && config.picking_type_id[0]) {
                     const pickingType = await env.services.orm.searchRead(
                         "stock.picking.type",
@@ -351,39 +359,64 @@ export const rfidService = {
                     );
                     
                     if (pickingType.length > 0 && pickingType[0].default_location_src_id) {
-                        const locationId = pickingType[0].default_location_src_id[0];
-                        domain.push(["location_id", "=", locationId]);
+                        locationId = pickingType[0].default_location_src_id[0];
                         console.log("📍 Filtering by store location:", locationId);
                     }
                 }
                 
-                const result = await env.services.orm.searchRead(
+                // First find the lot by name
+                const lotResult = await env.services.orm.searchRead(
                     "stock.lot",
-                    domain,
-                    ["id", "name", "product_id", "product_qty"],
+                    [["name", "=", epc]],
+                    ["id", "name", "product_id"],
                     { limit: 1 }
                 );
                 
-                if (result.length > 0) {
-                    const lot = result[0];
-                    
-                    // Check stock quantity
-                    if (lot.product_qty <= 0) {
-                        console.warn("⚠️ No stock available for lot:", lot.name);
-                        env.services.notification.add(
-                            `No stock available for lot/serial ${lot.name}`,
-                            { type: "warning" }
-                        );
-                        return null;
-                    }
-                    
-                    // Add to cache
-                    lotStockCache.set(lot.name, {
-                        product_id: lot.product_id,
-                        product_qty: lot.product_qty
-                    });
-                    return lot;
+                if (lotResult.length === 0) {
+                    return null;
                 }
+                
+                const lot = lotResult[0];
+                
+                // Then check stock quantity in the location
+                const quantDomain = [
+                    ["lot_id", "=", lot.id],
+                    ["quantity", ">", 0]
+                ];
+                
+                if (locationId) {
+                    quantDomain.push(["location_id", "=", locationId]);
+                }
+                
+                const quants = await env.services.orm.searchRead(
+                    "stock.quant",
+                    quantDomain,
+                    ["quantity"]
+                );
+                
+                // Sum up quantities
+                const totalQty = quants.reduce((sum, q) => sum + q.quantity, 0);
+                
+                if (totalQty <= 0) {
+                    console.warn("⚠️ No stock available for lot:", lot.name);
+                    env.services.notification.add(
+                        `No stock available for lot/serial ${lot.name}`,
+                        { type: "warning" }
+                    );
+                    return null;
+                }
+                
+                // Add to cache
+                lotStockCache.set(lot.name, {
+                    product_id: lot.product_id,
+                    product_qty: totalQty
+                });
+                
+                return {
+                    name: lot.name,
+                    product_id: lot.product_id,
+                    product_qty: totalQty
+                };
                 
                 return null;
             } catch (error) {
@@ -401,9 +434,9 @@ export const rfidService = {
                 console.log("🔄 Syncing lot stock quantities for store...");
                 
                 const config = pos.config;
-                const domain = [["product_qty", ">", 0]]; // Only load lots with available stock
+                let locationId = null;
                 
-                // Filter by POS store location
+                // Get POS store location
                 if (config.picking_type_id && config.picking_type_id[0]) {
                     const pickingType = await env.services.orm.searchRead(
                         "stock.picking.type",
@@ -413,37 +446,64 @@ export const rfidService = {
                     );
                     
                     if (pickingType.length > 0 && pickingType[0].default_location_src_id) {
-                        const locationId = pickingType[0].default_location_src_id[0];
-                        domain.push(["location_id", "=", locationId]);
+                        locationId = pickingType[0].default_location_src_id[0];
                         console.log("📍 Syncing stock for location:", locationId);
                     }
                 }
                 
-                // Fetch only lots with stock quantities > 0 in this location
-                const lots = await env.services.orm.searchRead(
-                    "stock.lot",
-                    domain,
-                    ["id", "name", "product_id", "product_qty"]
+                if (!locationId) {
+                    console.warn("⚠️ No location configured, syncing all lots");
+                }
+                
+                // Query stock.quant to get quantities by location and lot
+                const quantDomain = [["quantity", ">", 0]];
+                if (locationId) {
+                    quantDomain.push(["location_id", "=", locationId]);
+                }
+                
+                const quants = await env.services.orm.searchRead(
+                    "stock.quant",
+                    quantDomain,
+                    ["lot_id", "product_id", "quantity", "location_id"]
                 );
                 
-                // Update cache
+                console.log(`📦 Found ${quants.length} stock quants in location`);
+                
+                // Update cache - group by lot_id
                 lotStockCache.clear();
-                lots.forEach(lot => {
-                    lotStockCache.set(lot.name, {
-                        product_id: lot.product_id,
-                        product_qty: lot.product_qty
-                    });
+                const lotQuantities = new Map();
+                
+                quants.forEach(quant => {
+                    if (quant.lot_id) {
+                        const lotId = quant.lot_id[0];
+                        const lotName = quant.lot_id[1];
+                        const qty = quant.quantity;
+                        
+                        if (lotQuantities.has(lotName)) {
+                            lotQuantities.get(lotName).product_qty += qty;
+                        } else {
+                            lotQuantities.set(lotName, {
+                                product_id: quant.product_id,
+                                product_qty: qty
+                            });
+                        }
+                    }
+                });
+                
+                // Store in cache
+                lotQuantities.forEach((value, key) => {
+                    lotStockCache.set(key, value);
                 });
                 
                 lastSyncTime = new Date();
-                console.log(`✅ Synced ${lots.length} lots from store to cache`);
+                console.log(`✅ Synced ${lotStockCache.size} lots from store to cache`);
                 
                 env.services.notification.add(
-                    `Stock synced: ${lots.length} items in store`,
+                    `Stock synced: ${lotStockCache.size} items in store`,
                     { type: "success" }
                 );
                 
-                return lots.length;
+                return lotStockCache.size;
             } catch (error) {
                 console.error("❌ Error syncing lot stock:", error);
                 env.services.notification.add(
