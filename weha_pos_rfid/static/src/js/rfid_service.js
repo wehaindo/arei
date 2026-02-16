@@ -25,6 +25,10 @@ export const rfidService = {
         const maxReconnectAttempts = 10; // Max attempts before giving up
         let shouldReconnect = true; // Flag to control auto-reconnect
 
+        // Cache for lot stock quantities (offline checking)
+        let lotStockCache = new Map(); // Map<lot_name, {product_id, product_qty, location_id}>
+        let lastSyncTime = null;
+
         /**
          * Connect to RFID WebSocket server
          */
@@ -85,6 +89,12 @@ export const rfidService = {
                     if (reconnectTimer) {
                         clearTimeout(reconnectTimer);
                         reconnectTimer = null;
+                    }
+                    
+                    // Auto-sync stock when connected (if cache is empty or old)
+                    if (lotStockCache.size === 0 || !lastSyncTime || 
+                        (new Date() - lastSyncTime) > 3600000) { // 1 hour
+                        setTimeout(() => syncLotStock(), 1000); // Delay 1s to avoid blocking
                     }
                 };
 
@@ -270,6 +280,14 @@ export const rfidService = {
                             product_id: posProduct 
                         }, opts);
                         
+                        // Update cache quantity after successful addition
+                        if (lotStockCache.has(lot.name)) {
+                            const cached = lotStockCache.get(lot.name);
+                            cached.product_qty = Math.max(0, cached.product_qty - 1);
+                            lotStockCache.set(lot.name, cached);
+                            console.log("📊 Updated cache quantity for", lot.name, ":", cached.product_qty);
+                        }
+                        
                         env.services.notification.add(`Added: ${posProduct.display_name}`, {
                             type: "success",
                         });
@@ -296,18 +314,143 @@ export const rfidService = {
          * Search for lot/serial by EPC
          */
         async function searchLotByEPC(epc) {
+            // First check cache
+            if (lotStockCache.has(epc)) {
+                const cached = lotStockCache.get(epc);
+                console.log("📦 Using cached lot data for:", epc);
+                
+                // Check stock quantity
+                if (cached.product_qty <= 0) {
+                    console.warn("⚠️ No stock available for lot:", epc);
+                    env.services.notification.add(
+                        `No stock available for lot/serial ${epc}`,
+                        { type: "warning" }
+                    );
+                    return null;
+                }
+                
+                return {
+                    name: epc,
+                    product_id: cached.product_id,
+                    product_qty: cached.product_qty
+                };
+            }
+            
+            // If not in cache, fetch from database with location filter
             try {
+                const config = pos.config;
+                const domain = [["name", "=", epc]];
+                
+                // Filter by store location if configured
+                if (config.picking_type_id && config.picking_type_id[0]) {
+                    const pickingType = await env.services.orm.searchRead(
+                        "stock.picking.type",
+                        [["id", "=", config.picking_type_id[0]]],
+                        ["default_location_src_id"],
+                        { limit: 1 }
+                    );
+                    
+                    if (pickingType.length > 0 && pickingType[0].default_location_src_id) {
+                        const locationId = pickingType[0].default_location_src_id[0];
+                        domain.push(["location_id", "=", locationId]);
+                        console.log("📍 Filtering by store location:", locationId);
+                    }
+                }
+                
                 const result = await env.services.orm.searchRead(
                     "stock.lot",
-                    [["name", "=", epc]],
-                    ["id", "name", "product_id"],
+                    domain,
+                    ["id", "name", "product_id", "product_qty"],
                     { limit: 1 }
                 );
                 
-                return result.length > 0 ? result[0] : null;
+                if (result.length > 0) {
+                    const lot = result[0];
+                    
+                    // Check stock quantity
+                    if (lot.product_qty <= 0) {
+                        console.warn("⚠️ No stock available for lot:", lot.name);
+                        env.services.notification.add(
+                            `No stock available for lot/serial ${lot.name}`,
+                            { type: "warning" }
+                        );
+                        return null;
+                    }
+                    
+                    // Add to cache
+                    lotStockCache.set(lot.name, {
+                        product_id: lot.product_id,
+                        product_qty: lot.product_qty
+                    });
+                    return lot;
+                }
+                
+                return null;
             } catch (error) {
                 console.error("Error searching lot:", error);
                 return null;
+            }
+        }
+
+        /**
+         * Sync lot stock quantities from database to local cache
+         * Filtered by POS store location
+         */
+        async function syncLotStock() {
+            try {
+                console.log("🔄 Syncing lot stock quantities for store...");
+                
+                const config = pos.config;
+                const domain = [["product_qty", ">", 0]]; // Only load lots with available stock
+                
+                // Filter by POS store location
+                if (config.picking_type_id && config.picking_type_id[0]) {
+                    const pickingType = await env.services.orm.searchRead(
+                        "stock.picking.type",
+                        [["id", "=", config.picking_type_id[0]]],
+                        ["default_location_src_id"],
+                        { limit: 1 }
+                    );
+                    
+                    if (pickingType.length > 0 && pickingType[0].default_location_src_id) {
+                        const locationId = pickingType[0].default_location_src_id[0];
+                        domain.push(["location_id", "=", locationId]);
+                        console.log("📍 Syncing stock for location:", locationId);
+                    }
+                }
+                
+                // Fetch only lots with stock quantities > 0 in this location
+                const lots = await env.services.orm.searchRead(
+                    "stock.lot",
+                    domain,
+                    ["id", "name", "product_id", "product_qty"]
+                );
+                
+                // Update cache
+                lotStockCache.clear();
+                lots.forEach(lot => {
+                    lotStockCache.set(lot.name, {
+                        product_id: lot.product_id,
+                        product_qty: lot.product_qty
+                    });
+                });
+                
+                lastSyncTime = new Date();
+                console.log(`✅ Synced ${lots.length} lots from store to cache`);
+                
+                env.services.notification.add(
+                    `Stock synced: ${lots.length} items in store`,
+                    { type: "success" }
+                );
+                
+                return lots.length;
+            } catch (error) {
+                console.error("❌ Error syncing lot stock:", error);
+                env.services.notification.add(
+                    `Error syncing stock: ${error.message}`,
+                    { type: "danger" }
+                );
+                return 0;
             }
         }
 
@@ -380,12 +523,19 @@ export const rfidService = {
             disconnect,
             reconnect: retryConnection,
             clearSeenTags,
+            syncLotStock, // Expose sync method
             getStatus,
             get isConnected() {
                 return state.isConnected;
             },
             get isConnecting() {
                 return state.isConnecting;
+            },
+            get lastSyncTime() {
+                return lastSyncTime;
+            },
+            get cachedLotsCount() {
+                return lotStockCache.size;
             },
         };
     },
