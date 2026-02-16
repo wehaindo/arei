@@ -1,4 +1,4 @@
-/** @odoo-module */
+/** @odoo-module **/
 
 import { Component } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
@@ -9,7 +9,7 @@ import { patch } from "@web/core/utils/patch";
 /**
  * RFID Connection Status Indicator for POS Navbar
  */
-export class RFIDIndicator extends Component {
+class RFIDIndicator extends Component {
     static template = "weha_pos_rfid.RFIDIndicator";
     static props = {};
 
@@ -85,6 +85,6 @@ export class RFIDIndicator extends Component {
 }
 
 // Patch Navbar to include RFIDIndicator component
-patch(Navbar, {
+patch(Navbar.prototype, {
     components: { ...Navbar.components, RFIDIndicator },
 });
