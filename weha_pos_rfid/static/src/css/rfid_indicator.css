@@ -1,71 +1,67 @@
 /* RFID Status Indicator Styles */
 
-.rfid-status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border-radius: 4px;
+.rfid-status-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-size: 14px;
-    font-weight: 500;
-    margin-right: 10px;
-    user-select: none;
+    margin-right: 8px;
+    padding: 0;
+    border: 2px solid transparent;
 }
 
-.rfid-status-indicator:hover {
-    opacity: 0.8;
-    transform: translateY(-1px);
+.rfid-status-icon:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.rfid-status-indicator i {
-    font-size: 18px;
-}
-
-.rfid-status-text {
-    white-space: nowrap;
+.rfid-status-icon i {
+    font-size: 20px;
 }
 
 /* Connected State */
-.rfid-status-indicator.rfid-connected {
-    background-color: rgba(40, 167, 69, 0.1);
-    border: 1px solid rgba(40, 167, 69, 0.3);
-}
-
-.rfid-status-indicator.rfid-connected:hover {
+.rfid-status-icon.rfid-connected {
     background-color: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.4);
 }
 
-.rfid-status-indicator.rfid-connected .text-success {
+.rfid-status-icon.rfid-connected:hover {
+    background-color: rgba(40, 167, 69, 0.25);
+    border-color: rgba(40, 167, 69, 0.6);
+}
+
+.rfid-status-icon.rfid-connected i {
     color: #28a745 !important;
 }
 
 /* Connecting State */
-.rfid-status-indicator.rfid-connecting {
-    background-color: rgba(255, 193, 7, 0.1);
-    border: 1px solid rgba(255, 193, 7, 0.3);
-}
-
-.rfid-status-indicator.rfid-connecting:hover {
+.rfid-status-icon.rfid-connecting {
     background-color: rgba(255, 193, 7, 0.15);
+    border-color: rgba(255, 193, 7, 0.4);
 }
 
-.rfid-status-indicator.rfid-connecting .text-warning {
+.rfid-status-icon.rfid-connecting:hover {
+    background-color: rgba(255, 193, 7, 0.25);
+    border-color: rgba(255, 193, 7, 0.6);
+}
+
+.rfid-status-icon.rfid-connecting i {
     color: #ffc107 !important;
 }
 
 /* Disconnected State */
-.rfid-status-indicator.rfid-disconnected {
-    background-color: rgba(220, 53, 69, 0.1);
-    border: 1px solid rgba(220, 53, 69, 0.3);
-}
-
-.rfid-status-indicator.rfid-disconnected:hover {
+.rfid-status-icon.rfid-disconnected {
     background-color: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
 }
 
-.rfid-status-indicator.rfid-disconnected .text-danger {
+.rfid-status-icon.rfid-disconnected:hover {
+    background-color: rgba(220, 53, 69, 0.25);
+    border-color: rgba(220, 53, 69, 0.6);
+}
+
+.rfid-status-icon.rfid-disconnected i {
     color: #dc3545 !important;
 }
 
