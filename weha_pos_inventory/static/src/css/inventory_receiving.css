@@ -1,0 +1,63 @@
+.inventory-receiving-popup {
+    max-width: 800px;
+    min-height: 500px;
+}
+
+.inventory-receiving-popup .popup-body {
+    padding: 20px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.inventory-receiving-popup .form-group {
+    margin-bottom: 15px;
+}
+
+.inventory-receiving-popup .form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.inventory-receiving-popup .form-control {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.inventory-receiving-popup .lines-list {
+    margin-top: 20px;
+    border-top: 2px solid #ddd;
+    padding-top: 15px;
+}
+
+.inventory-receiving-popup .lines-list table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.inventory-receiving-popup .lines-list th,
+.inventory-receiving-popup .lines-list td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.inventory-receiving-popup .lines-list th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+}
+
+.inventory-receiving-popup .created-picking-info {
+    padding: 20px;
+}
+
+.receiving-button {
+    margin-left: 10px;
+    padding: 8px 16px;
+}
+
+.receiving-button i {
+    margin-right: 5px;
+}

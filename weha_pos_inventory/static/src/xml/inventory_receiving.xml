@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    
+    <!-- Add Receiving button to navbar -->
+    <t t-name="weha_pos_inventory.NavbarReceivingButton" t-inherit="point_of_sale.Navbar" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('pos-rightheader')]" position="inside">
+            <button t-if="showReceivingButton()" 
+                    class="btn btn-light receiving-button"
+                    t-on-click="onReceivingClick">
+                <i class="fa fa-download"/> Receiving
+            </button>
+        </xpath>
+    </t>
+    
+    <!-- Inventory Receiving Popup -->
+    <t t-name="weha_pos_inventory.InventoryReceivingPopup">
+        <div class="popup inventory-receiving-popup">
+            <div class="popup-header">
+                <h3>Inventory Receiving</h3>
+            </div>
+            
+            <div class="popup-body">
+                <div t-if="!state.createdPicking" class="receiving-form">
+                    <!-- Product Selection -->
+                    <div class="form-group">
+                        <label>Product</label>
+                        <select class="form-control" t-on-change="onProductSelect">
+                            <option value="">-- Select Product --</option>
+                            <t t-foreach="products" t-as="product" t-key="product.id">
+                                <option t-att-value="product.id">
+                                    <t t-esc="product.display_name"/>
+                                </option>
+                            </t>
+                        </select>
+                    </div>
+                    
+                    <!-- Quantity -->
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" 
+                               class="form-control" 
+                               t-model="state.qty"
+                               min="1"
+                               step="1"/>
+                    </div>
+                    
+                    <!-- Lot/Serial (if tracked) -->
+                    <div t-if="state.selectedProduct and state.selectedProduct.tracking !== 'none'" 
+                         class="form-group">
+                        <label>
+                            <t t-if="state.selectedProduct.tracking === 'lot'">Lot Number</t>
+                            <t t-if="state.selectedProduct.tracking === 'serial'">Serial Number</t>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               t-model="state.lotName"
+                               placeholder="Enter lot/serial number"/>
+                    </div>
+                    
+                    <!-- Add Button -->
+                    <button class="btn btn-primary" t-on-click="addLine">
+                        <i class="fa fa-plus"/> Add Line
+                    </button>
+                    
+                    <!-- Lines List -->
+                    <div t-if="state.lines.length > 0" class="lines-list mt-3">
+                        <h4>Products to Receive:</h4>
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Qty</th>
+                                    <th>Lot/Serial</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.lines" t-as="line" t-key="line_index">
+                                    <tr>
+                                        <td><t t-esc="line.product_name"/></td>
+                                        <td><t t-esc="line.qty"/></td>
+                                        <td><t t-esc="line.lot_name or '-'"/></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger" 
+                                                    t-on-click="() => removeLine(line_index)">
+                                                <i class="fa fa-trash"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Created Picking Info -->
+                <div t-if="state.createdPicking" class="created-picking-info">
+                    <div class="alert alert-success">
+                        <h4>
+                            <i class="fa fa-check-circle"/> Receiving Order Created
+                        </h4>
+                        <p>
+                            <strong>Reference:</strong> <t t-esc="state.createdPicking.name"/><br/>
+                            <strong>Status:</strong> <t t-esc="state.createdPicking.state"/>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="popup-footer">
+                <button t-if="!state.createdPicking" 
+                        class="btn btn-secondary" 
+                        t-on-click="cancel">
+                    Cancel
+                </button>
+                
+                <button t-if="!state.createdPicking and state.lines.length > 0" 
+                        class="btn btn-primary" 
+                        t-on-click="createReceiving">
+                    <i class="fa fa-save"/> Create Receiving
+                </button>
+                
+                <button t-if="state.createdPicking" 
+                        class="btn btn-success" 
+                        t-on-click="validateReceiving">
+                    <i class="fa fa-check"/> Validate
+                </button>
+                
+                <button t-if="state.createdPicking" 
+                        class="btn btn-secondary" 
+                        t-on-click="reset">
+                    <i class="fa fa-plus"/> New Receiving
+                </button>
+                
+                <button t-if="state.createdPicking" 
+                        class="btn btn-light" 
+                        t-on-click="confirm">
+                    Close
+                </button>
+            </div>
+        </div>
+    </t>
+    
+</templates>
