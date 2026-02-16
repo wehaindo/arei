@@ -18,12 +18,18 @@
     ],
     'assets': {
         'point_of_sale._assets_pos': [
-            'weha_pos_rfid/static/src/css/rfid_indicator.css',
+            # Assets must be loaded in dependency order
+            # Service first (creates the rfid service)
+            'weha_pos_rfid/static/src/js/rfid_service.js',
+            # Button component
+            'weha_pos_rfid/static/src/js/rfid_button.js',
+            # Navbar patch (depends on Navbar being loaded by point_of_sale)
+            'weha_pos_rfid/static/src/js/rfid_indicator.js',
+            # Templates
             'weha_pos_rfid/static/src/xml/rfid_button.xml',
             'weha_pos_rfid/static/src/xml/rfid_indicator.xml',
-            'weha_pos_rfid/static/src/js/rfid_service.js',
-            'weha_pos_rfid/static/src/js/rfid_button.js',
-            'weha_pos_rfid/static/src/js/rfid_indicator.js',
+            # Styles
+            'weha_pos_rfid/static/src/css/rfid_indicator.css',
         ],
     },
     'installable': True,
