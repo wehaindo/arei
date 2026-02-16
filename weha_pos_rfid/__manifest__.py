@@ -23,7 +23,7 @@
             'weha_pos_rfid/static/src/xml/rfid_indicator.xml',
             'weha_pos_rfid/static/src/js/rfid_service.js',
             'weha_pos_rfid/static/src/js/rfid_button.js',
-            ('lazy', 'weha_pos_rfid/static/src/js/rfid_indicator.js'),
+            'weha_pos_rfid/static/src/js/rfid_indicator.js',
         ],
     },
     'installable': True,
