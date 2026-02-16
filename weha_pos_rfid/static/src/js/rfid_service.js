@@ -1,7 +1,7 @@
 /** @odoo-module */
 
 import { registry } from "@web/core/registry";
-import { Component } from "@odoo/owl";
+import { reactive } from "@odoo/owl";
 
 /**
  * RFID Service - Handles WebSocket connection to RFID reader
@@ -11,10 +11,15 @@ export const rfidService = {
     
     start(env, { pos }) {
         let websocket = null;
-        let isConnected = false;
-        let isConnecting = false;
+        
+        // Use reactive state so UI components update automatically
+        const state = reactive({
+            isConnected: false,
+            isConnecting: false,
+            reconnectAttempts: 0,
+        });
+        
         let reconnectTimer = null;
-        let reconnectAttempts = 0;
         const baseReconnectDelay = 2000; // 2 seconds
         const maxReconnectDelay = 30000; // 30 seconds
         const maxReconnectAttempts = 10; // Max attempts before giving up
@@ -32,13 +37,13 @@ export const rfidService = {
             }
 
             // Prevent multiple simultaneous connection attempts
-            if (isConnecting) {
+            if (state.isConnecting) {
                 console.log("⏳ Connection attempt already in progress...");
                 return;
             }
 
             // Check if max retry attempts reached
-            if (!manualRetry && maxReconnectAttempts > 0 && reconnectAttempts >= maxReconnectAttempts) {
+            if (!manualRetry && maxReconnectAttempts > 0 && state.reconnectAttempts >= maxReconnectAttempts) {
                 console.warn("❌ Max reconnection attempts reached. Use manual retry.");
                 env.services.notification.add(
                     `RFID connection failed after ${maxReconnectAttempts} attempts. Click to retry manually.`,
@@ -51,18 +56,18 @@ export const rfidService = {
             }
 
             const wsUrl = config.rfid_websocket_url || "ws://localhost:8081";
-            const attemptInfo = reconnectAttempts > 0 ? ` (Attempt ${reconnectAttempts + 1})` : "";
+            const attemptInfo = state.reconnectAttempts > 0 ? ` (Attempt ${state.reconnectAttempts + 1})` : "";
             console.log(`Connecting to RFID WebSocket: ${wsUrl}${attemptInfo}`);
 
-            isConnecting = true;
+            state.isConnecting = true;
 
             try {
                 websocket = new WebSocket(wsUrl);
 
                 websocket.onopen = function() {
-                    isConnected = true;
-                    isConnecting = false;
-                    reconnectAttempts = 0; // Reset attempts on successful connection
+                    state.isConnected = true;
+                    state.isConnecting = false;
+                    state.reconnectAttempts = 0; // Reset attempts on successful connection
                     shouldReconnect = true;
                     
                     const wasReconnecting = reconnectTimer !== null;
@@ -101,36 +106,36 @@ export const rfidService = {
                 };
 
                 websocket.onerror = function(error) {
-                    isConnecting = false;
+                    state.isConnecting = false;
                     console.error("RFID WebSocket error:", error);
                     
                     // Only show notification on first error or every 5th attempt
-                    if (reconnectAttempts === 0 || reconnectAttempts % 5 === 0) {
+                    if (state.reconnectAttempts === 0 || state.reconnectAttempts % 5 === 0) {
                         env.services.notification.add(
-                            `RFID reader connection error (Attempt ${reconnectAttempts + 1})`,
+                            `RFID reader connection error (Attempt ${state.reconnectAttempts + 1})`,
                             { type: "danger" }
                         );
                     }
                 };
 
                 websocket.onclose = function(event) {
-                    isConnected = false;
-                    isConnecting = false;
+                    state.isConnected = false;
+                    state.isConnecting = false;
                     
                     const closeReason = event.reason || "Connection closed";
                     console.log(`RFID WebSocket closed: ${closeReason} (Code: ${event.code})`);
                     
                     // Auto-reconnect if enabled and not a normal closure
                     if (shouldReconnect && event.code !== 1000) {
-                        reconnectAttempts++;
+                        state.reconnectAttempts++;
                         
                         // Calculate exponential backoff delay
                         const delay = Math.min(
-                            baseReconnectDelay * Math.pow(1.5, reconnectAttempts - 1),
+                            baseReconnectDelay * Math.pow(1.5, state.reconnectAttempts - 1),
                             maxReconnectDelay
                         );
                         
-                        console.log(`⏳ Reconnecting in ${(delay/1000).toFixed(1)}s... (Attempt ${reconnectAttempts})`);
+                        console.log(`⏳ Reconnecting in ${(delay/1000).toFixed(1)}s... (Attempt ${state.reconnectAttempts})`);
                         
                         // Clear any existing timer
                         if (reconnectTimer) {
@@ -140,7 +145,7 @@ export const rfidService = {
                         // Schedule reconnection
                         reconnectTimer = setTimeout(() => {
                             reconnectTimer = null;
-                            console.log(`🔄 Attempting to reconnect to RFID... (Attempt ${reconnectAttempts})`);
+                            console.log(`🔄 Attempting to reconnect to RFID... (Attempt ${state.reconnectAttempts})`);
                             connect();
                         }, delay);
                     } else if (event.code === 1000) {
@@ -149,7 +154,7 @@ export const rfidService = {
                 };
 
             } catch (error) {
-                isConnecting = false;
+                state.isConnecting = false;
                 console.error("Failed to create RFID WebSocket:", error);
                 env.services.notification.add(
                     `Failed to connect to RFID reader: ${error.message}`,
@@ -158,9 +163,9 @@ export const rfidService = {
                 
                 // Try to reconnect on connection creation failure
                 if (shouldReconnect) {
-                    reconnectAttempts++;
+                    state.reconnectAttempts++;
                     const delay = Math.min(
-                        baseReconnectDelay * Math.pow(1.5, reconnectAttempts - 1),
+                        baseReconnectDelay * Math.pow(1.5, state.reconnectAttempts - 1),
                         maxReconnectDelay
                     );
                     
@@ -342,7 +347,7 @@ export const rfidService = {
          * Manually retry connection (resets attempt counter)
          */
         function retryConnection() {
-            reconnectAttempts = 0;
+            state.reconnectAttempts = 0;
             shouldReconnect = true;
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);
@@ -356,9 +361,9 @@ export const rfidService = {
          */
         function getStatus() {
             return {
-                connected: isConnected,
-                connecting: isConnecting,
-                attempts: reconnectAttempts,
+                connected: state.isConnected,
+                connecting: state.isConnecting,
+                attempts: state.reconnectAttempts,
                 willReconnect: shouldReconnect,
             };
         }
@@ -368,18 +373,19 @@ export const rfidService = {
             connect();
         }
 
-        // Return service API
+        // Return service API (expose reactive state)
         return {
+            state, // Expose reactive state for components
             connect,
             disconnect,
             reconnect: retryConnection,
             clearSeenTags,
             getStatus,
             get isConnected() {
-                return isConnected;
+                return state.isConnected;
             },
             get isConnecting() {
-                return isConnecting;
+                return state.isConnecting;
             },
         };
     },
