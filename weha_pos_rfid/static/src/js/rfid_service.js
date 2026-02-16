@@ -223,9 +223,9 @@ export const rfidService = {
                     if (currentOrder) {
                         console.log("➕ Adding product to order:", posProduct.display_name);
                         
-                        // Odoo 18: Use the order's add_product method
-                        await currentOrder.add_product(posProduct, {
-                            quantity: 1,
+                        // Odoo 18: Use pos.addLineToCurrentOrder
+                        await pos.addLineToCurrentOrder({ 
+                            product_id: posProduct 
                         });
                         
                         env.services.notification.add(`Added: ${posProduct.display_name}`, {
