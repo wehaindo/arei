@@ -221,6 +221,27 @@ export const rfidService = {
                 if (pos.config.rfid_auto_add) {
                     const currentOrder = pos.get_order();
                     if (currentOrder) {
+                        // Check if lot/serial is already in the current order
+                        if (posProduct.tracking !== 'none') {
+                            const existingLine = currentOrder.lines.find(line => {
+                                if (line.product_id.id !== posProduct.id) {
+                                    return false;
+                                }
+                                // Check pack lot lines for this lot/serial
+                                const packLots = line.pack_lot_ids || [];
+                                return packLots.some(packLot => packLot.lot_name === lot.name);
+                            });
+                            
+                            if (existingLine) {
+                                console.warn("⚠️ Lot/Serial already in order:", lot.name);
+                                env.services.notification.add(
+                                    `${posProduct.display_name} with lot/serial ${lot.name} is already in the order`,
+                                    { type: "warning" }
+                                );
+                                return;
+                            }
+                        }
+                        
                         console.log("➕ Adding product to order:", posProduct.display_name);
                         
                         // Prepare options with lot/serial number to skip popup
