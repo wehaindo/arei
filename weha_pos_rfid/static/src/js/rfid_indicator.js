@@ -2,6 +2,7 @@
 
 import { Component } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import { registry } from "@web/core/registry";
 
 /**
  * RFID Connection Status Indicator for POS Navbar
@@ -77,3 +78,6 @@ export class RFIDIndicator extends Component {
         }
     }
 }
+
+// Register component in the POS component registry
+registry.category("pos_available_components").add("RFIDIndicator", RFIDIndicator);
