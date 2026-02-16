@@ -2,15 +2,20 @@
 
 import { Component } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
-import { registry } from "@web/core/registry";
+import { usePos } from "@point_of_sale/app/hooks/pos_hook";
+import { Navbar } from "@point_of_sale/app/components/navbar/navbar";
+import { patch } from "@web/core/utils/patch";
 
 /**
  * RFID Connection Status Indicator for POS Navbar
  */
 export class RFIDIndicator extends Component {
     static template = "weha_pos_rfid.RFIDIndicator";
+    static props = {};
 
     setup() {
+        this.pos = usePos();
+        this.ui = useService("ui");
         this.rfid = useService("rfid");
         this.notification = useService("notification");
     }
@@ -79,5 +84,7 @@ export class RFIDIndicator extends Component {
     }
 }
 
-// Register component in the POS component registry
-registry.category("pos_available_components").add("RFIDIndicator", RFIDIndicator);
+// Patch Navbar to include RFIDIndicator component
+patch(Navbar, {
+    components: { ...Navbar.components, RFIDIndicator },
+});
