@@ -34,16 +34,20 @@ patch(Navbar.prototype, {
         const rfidService = this.env.services.rfid;
         if (!rfidService) return 'RFID: Error';
         
+        const cachedCount = rfidService.cachedLotsCount || 0;
+        const syncTime = rfidService.lastSyncTime;
+        const timeStr = syncTime ? ` (${syncTime.toLocaleTimeString()})` : '';
+        
         if (rfidService.isConnected) {
-            return 'RFID: Connected';
+            return `RFID: Connected | ${cachedCount} items cached${timeStr}`;
         } else if (rfidService.isConnecting) {
-            return 'RFID: Connecting...';
+            return `RFID: Connecting... | ${cachedCount} items cached`;
         } else {
-            return 'RFID: Disconnected';
+            return `RFID: Disconnected | ${cachedCount} items cached`;
         }
     },
     
-    onRfidClick() {
+    async onRfidClick() {
         const rfidService = this.env.services.rfid;
         if (!rfidService) {
             this.notification.add('RFID service not available', {
@@ -53,12 +57,10 @@ patch(Navbar.prototype, {
         }
         
         if (!rfidService.isConnected && !rfidService.isConnecting) {
-            rfidService.retryConnection();
+            rfidService.reconnect();
         } else if (rfidService.isConnected) {
-            this.notification.add(
-                `RFID Reader connected at ws://localhost:${rfidService.port}`,
-                { type: 'success' }
-            );
+            // Sync stock on click when connected
+            await rfidService.syncLotStock();
         } else {
             this.notification.add(
                 'RFID Reader is connecting...',
