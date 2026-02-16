@@ -25,6 +25,10 @@ export const rfidService = {
         const maxReconnectAttempts = 10; // Max attempts before giving up
         let shouldReconnect = true; // Flag to control auto-reconnect
 
+        // Cache for lot stock quantities (offline checking)
+        let lotStockCache = new Map(); // Map<lot_name, {product_id, product_qty}>
+        let lastSyncTime = null;
+
         /**
          * Connect to RFID WebSocket server
          */
@@ -85,6 +89,12 @@ export const rfidService = {
                     if (reconnectTimer) {
                         clearTimeout(reconnectTimer);
                         reconnectTimer = null;
+                    }
+                    
+                    // Auto-sync stock when connected (if cache is empty or old)
+                    if (lotStockCache.size === 0 || !lastSyncTime || 
+                        (new Date() - lastSyncTime) > 3600000) { // 1 hour
+                        setTimeout(() => syncLotStock(), 1000); // Delay 1s to avoid blocking
                     }
                 };
 
@@ -283,6 +293,14 @@ export const rfidService = {
                             product_id: posProduct 
                         }, opts);
                         
+                        // Update cache quantity after successful addition
+                        if (lotStockCache.has(lot.name)) {
+                            const cached = lotStockCache.get(lot.name);
+                            cached.product_qty = Math.max(0, cached.product_qty - 1);
+                            lotStockCache.set(lot.name, cached);
+                            console.log("📊 Updated cache quantity for", lot.name, ":", cached.product_qty);
+                        }
+                        
                         env.services.notification.add(`Added: ${posProduct.display_name}`, {
                             type: "success",
                         });
@@ -309,6 +327,18 @@ export const rfidService = {
          * Search for lot/serial by EPC
          */
         async function searchLotByEPC(epc) {
+            // First check cache
+            if (lotStockCache.has(epc)) {
+                const cached = lotStockCache.get(epc);
+                console.log("📦 Using cached lot data for:", epc);
+                return {
+                    name: epc,
+                    product_id: cached.product_id,
+                    product_qty: cached.product_qty
+                };
+            }
+            
+            // If not in cache, fetch from database
             try {
                 const result = await env.services.orm.searchRead(
                     "stock.lot",
@@ -317,10 +347,82 @@ export const rfidService = {
                     { limit: 1 }
                 );
                 
-                return result.length > 0 ? result[0] : null;
+                if (result.length > 0) {
+                    // Add to cache
+                    const lot = result[0];
+                    lotStockCache.set(lot.name, {
+                        product_id: lot.product_id,
+                        product_qty: lot.product_qty
+                    });
+                    return lot;
+                }
+                
+                return null;
             } catch (error) {
                 console.error("Error searching lot:", error);
                 return null;
+            }
+        }
+
+        /**
+         * Sync lot stock quantities from database to local cache
+         */
+        async function syncLotStock() {
+            try {
+                console.log("🔄 Syncing lot stock quantities...");
+                
+                const config = pos.config;
+                const domain = [];
+                
+                // If POS has a specific stock location, filter by it
+                if (config.picking_type_id && config.picking_type_id[0]) {
+                    // Get the location from picking type
+                    const pickingType = await env.services.orm.searchRead(
+                        "stock.picking.type",
+                        [["id", "=", config.picking_type_id[0]]],
+                        ["default_location_src_id"],
+                        { limit: 1 }
+                    );
+                    
+                    if (pickingType.length > 0 && pickingType[0].default_location_src_id) {
+                        const locationId = pickingType[0].default_location_src_id[0];
+                        domain.push(["location_id", "=", locationId]);
+                        console.log("📍 Filtering by location:", locationId);
+                    }
+                }
+                
+                // Fetch all lots with stock quantities
+                const lots = await env.services.orm.searchRead(
+                    "stock.lot",
+                    domain,
+                    ["id", "name", "product_id", "product_qty"]
+                );
+                
+                // Update cache
+                lotStockCache.clear();
+                lots.forEach(lot => {
+                    lotStockCache.set(lot.name, {
+                        product_id: lot.product_id,
+                        product_qty: lot.product_qty
+                    });
+                });
+                
+                lastSyncTime = new Date();
+                console.log(`✅ Synced ${lots.length} lots to cache`);
+                
+                env.services.notification.add(
+                    `Stock synced: ${lots.length} items`,
+                    { type: "success" }
+                );
+                
+                return lots.length;
+            } catch (error) {
+                console.error("❌ Error syncing lot stock:", error);
+                env.services.notification.add(
+                    `Error syncing stock: ${error.message}`,
+                    { type: "danger" }
+                );
+                return 0;
             }
         }
 
@@ -393,12 +495,19 @@ export const rfidService = {
             disconnect,
             reconnect: retryConnection,
             clearSeenTags,
+            syncLotStock, // Expose sync method
             getStatus,
             get isConnected() {
                 return state.isConnected;
             },
             get isConnecting() {
                 return state.isConnecting;
+            },
+            get lastSyncTime() {
+                return lastSyncTime;
+            },
+            get cachedLotsCount() {
+                return lotStockCache.size;
             },
         };
     },
