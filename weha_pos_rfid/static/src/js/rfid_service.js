@@ -198,6 +198,19 @@ export const rfidService = {
 
                 console.log("✅ Lot found:", lot);
 
+                // Check if lot has available stock
+                const availableQty = lot.product_qty || 0;
+                console.log("📊 Stock quantity for lot", lot.name, ":", availableQty);
+                
+                if (availableQty <= 0) {
+                    console.warn("⚠️ No stock available for lot:", lot.name);
+                    env.services.notification.add(
+                        `No stock available for lot/serial ${lot.name}`,
+                        { type: "warning" }
+                    );
+                    return;
+                }
+
                 const product = lot.product_id;
                 if (!product) {
                     console.warn("⚠️ No product linked to lot:", lot.name);
@@ -300,7 +313,7 @@ export const rfidService = {
                 const result = await env.services.orm.searchRead(
                     "stock.lot",
                     [["name", "=", epc]],
-                    ["id", "name", "product_id"],
+                    ["id", "name", "product_id", "product_qty"],
                     { limit: 1 }
                 );
                 
