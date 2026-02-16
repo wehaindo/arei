@@ -372,7 +372,7 @@ export const rfidService = {
                 console.log("🔄 Syncing lot stock quantities...");
                 
                 const config = pos.config;
-                const domain = [];
+                const domain = [["product_qty", ">", 0]]; // Only load lots with available stock
                 
                 // If POS has a specific stock location, filter by it
                 if (config.picking_type_id && config.picking_type_id[0]) {
@@ -391,7 +391,7 @@ export const rfidService = {
                     }
                 }
                 
-                // Fetch all lots with stock quantities
+                // Fetch only lots with stock quantities > 0
                 const lots = await env.services.orm.searchRead(
                     "stock.lot",
                     domain,
