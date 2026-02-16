@@ -223,10 +223,26 @@ export const rfidService = {
                     if (currentOrder) {
                         console.log("➕ Adding product to order:", posProduct.display_name);
                         
-                        // Odoo 18: Use pos.addLineToCurrentOrder
+                        // Prepare options with lot/serial number to skip popup
+                        const opts = {};
+                        
+                        // If product has tracking, automatically assign the lot we found
+                        if (posProduct.tracking !== 'none') {
+                            opts.code = {
+                                type: 'lot',
+                                code: lot.name  // Use the lot name (EPC) we already found
+                            };
+                            opts.draftPackLotLines = {
+                                modifiedPackLotLines: {},
+                                newPackLotLines: [{ lot_name: lot.name }]
+                            };
+                            console.log("📦 Auto-assigning lot/serial:", lot.name);
+                        }
+                        
+                        // Odoo 18: Use pos.addLineToCurrentOrder with lot info
                         await pos.addLineToCurrentOrder({ 
                             product_id: posProduct 
-                        });
+                        }, opts);
                         
                         env.services.notification.add(`Added: ${posProduct.display_name}`, {
                             type: "success",
